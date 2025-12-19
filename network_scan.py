@@ -11,6 +11,19 @@ import shutil
 import os
 from datetime import datetime
 
+
+# ===================== Colors ===========================
+RESET   = "\033[0m"
+BOLD    = "\033[1m"
+DIM     = "\033[2m"
+
+FG_GREEN = "\033[92m"
+FG_BLUE  = "\033[94m"
+FG_YELLOW= "\033[93m"
+FG_RED   = "\033[91m"
+FG_CYAN  = "\033[96m"
+FG_GRAY  = "\033[90m"
+
 # =========================================================
 # ===================== Paths =============================
 # =========================================================
@@ -303,22 +316,66 @@ def perform_uninstall():
 # =========================================================
 def main_menu():
     while True:
-        print(f"\n==================== {T['menu_title']} ====================")
-        print(T["menu_option_scan"])
-        print(T["menu_option_update"])
-        print(T["menu_option_uninstall"])
-        print(T["menu_option_exit"])
-        choice = input(f"{T['prompt_choice']} ")
+        os.system("clear")
 
+        # ===== Header =====
+        print(FG_CYAN + BOLD + "╔" + "═"*54 + "╗" + RESET)
+        print(
+            FG_CYAN + BOLD + "║" + RESET +
+            f"{T['menu_title']:^54}" +
+            FG_CYAN + BOLD + "║" + RESET
+        )
+        print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
+
+        # ===== Info line =====
+        iface = get_interface()
+        now = datetime.now().strftime("%H:%M:%S")
+
+        print(
+            FG_GRAY + "║  " +
+            f"{T['info_interface']}: {iface:<10} | " +
+            f"{T['info_mode']}: {T['mode']:<18} | " +
+            f"{now:<6}" +
+            "  ║" + RESET
+        )
+
+        print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
+
+        # ===== Menu options =====
+        print(FG_GREEN  + "║  [1] ▶  " + RESET + T["menu_option_scan"][3:].ljust(40) + "║")
+        print(FG_BLUE   + "║  [2] ⟳  " + RESET + T["menu_option_update"][3:].ljust(40) + "║")
+        print(FG_YELLOW + "║  [3] ✖  " + RESET + T["menu_option_uninstall"][3:].ljust(40) + "║")
+        print(FG_RED    + "║  [4] ⏻  " + RESET + T["menu_option_exit"][3:].ljust(40) + "║")
+
+        print(FG_CYAN + BOLD + "╚" + "═"*54 + "╝" + RESET)
+
+        # ===== Input =====
+        choice = input(
+            "\n" +
+            FG_GRAY + "› " + RESET +
+            BOLD + T["prompt_choice"] + " "
+        ).strip()
+
+        # ===== Actions =====
         if choice == "1":
             perform_scan()
+
         elif choice == "2":
             perform_update()
+
         elif choice == "3":
             perform_uninstall()
-            break
-        elif choice == "4":
+            print("\n" + FG_GREEN + T["exit_uninstall"] + RESET)
+            time.sleep(0.8)
             break
 
+        elif choice == "4":
+            print("\n" + FG_GREEN + T["exit_message"] + RESET)
+            time.sleep(0.8)
+            break
+
+        else:
+            print(FG_RED + "\n[!] " + T["invalid_choice"] + RESET)
+            time.sleep(1)
 if __name__ == "__main__":
     main_menu()
