@@ -38,31 +38,42 @@ else
 fi
 
 # -------------------------------
-# بررسی پیش‌نیازها (اصلاح حرفه‌ای)
+# بررسی و نصب پیش‌نیازها (سازگار با Kali)
 # -------------------------------
-REQUIRED_PACKAGES=(
-  python3
-  curl
-  iproute2
-  iputils-ping
-  awk
-  coreutils
-)
-
 echo
 echo "[+] Checking system dependencies..."
 
-NEED_UPDATE=false
-for pkg in "${REQUIRED_PACKAGES[@]}"; do
-  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-    NEED_UPDATE=true
-    break
-  fi
-done
+sudo apt update
 
-if $NEED_UPDATE; then
-  sudo apt update
-  sudo apt install -y "${REQUIRED_PACKAGES[@]}"
+# python3
+if ! command -v python3 >/dev/null 2>&1; then
+  sudo apt install -y python3
+fi
+
+# curl
+if ! command -v curl >/dev/null 2>&1; then
+  sudo apt install -y curl
+fi
+
+# ip
+if ! command -v ip >/dev/null 2>&1; then
+  sudo apt install -y iproute2
+fi
+
+# ping
+if ! command -v ping >/dev/null 2>&1; then
+  sudo apt install -y iputils-ping
+fi
+
+# gawk (به‌جای awk)
+if ! command -v awk >/dev/null 2>&1; then
+  echo "[+] Installing gawk explicitly (awk virtual package fix)..."
+  sudo apt install -y gawk
+fi
+
+# sort (coreutils)
+if ! command -v sort >/dev/null 2>&1; then
+  sudo apt install -y coreutils
 fi
 
 # -------------------------------
@@ -83,7 +94,7 @@ https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/ma
 chmod +x network_scan.py
 
 # -------------------------------
-# ذخیره تنظیمات
+# ذخیره تنظیمات زبان
 # -------------------------------
 echo "NETSCAN_LANG=$NETSCAN_LANG" > "$CONF_FILE"
 chmod 600 "$CONF_FILE"
@@ -103,7 +114,6 @@ echo
 echo "[+] Building large OUI database (one-time)..."
 
 mkdir -p "$TMP_DIR"
-
 RAW_FILE="$TMP_DIR/oui_raw.txt"
 
 curl -fsSL \
@@ -115,7 +125,7 @@ if [[ ! -s "$RAW_FILE" ]]; then
   exit 1
 fi
 
-awk '
+gawk '
 BEGIN { FS=" "; OFS="|" }
 {
   if ($1 ~ /^[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}-[0-9A-Fa-f]{2}$/) {
