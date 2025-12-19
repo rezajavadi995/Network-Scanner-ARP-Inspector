@@ -8,20 +8,74 @@ import re
 import socket
 import struct
 import shutil
+import os
+from datetime import datetime
 
 # =========================================================
-# ========== تنظیمات اصلی (رفتار انسانی و کم‌ردپا) ==========
+# ===================== Language Layer ====================
+# =========================================================
+
+LANG = os.environ.get("NETSCAN_LANG", "en")
+
+TEXT = {
+    "en": {
+        "info_interface": "Interface",
+        "info_mode": "Mode",
+        "info_network": "Network Range",
+        "info_delay": "Ping Delay",
+        "info_arp": "ARP Source",
+        "info_started": "Started At",
+        "mode": "adaptive (human-like)",
+        "arp_ip": "ip neigh",
+        "scan_start": "Starting network scan",
+        "ping_done": "Ping scan completed",
+        "arp_read": "Reading ARP table",
+        "active": "Active Devices (Ping OK)",
+        "arp_only": "ARP Only (No Ping)",
+        "incomplete": "ARP Incomplete",
+        "total": "Total devices (excluding yourself)",
+        "total_self": "Total with yourself",
+        "done": "Operation completed successfully",
+        "stopped": "Scan interrupted by user"
+    },
+    "fa": {
+        "info_interface": "اینترفیس",
+        "info_mode": "حالت",
+        "info_network": "رنج شبکه",
+        "info_delay": "تاخیر پینگ",
+        "info_arp": "منبع ARP",
+        "info_started": "زمان شروع",
+        "mode": "تطبیقی (رفتار انسانی)",
+        "arp_ip": "ip neigh",
+        "scan_start": "شروع اسکن شبکه",
+        "ping_done": "پایان اسکن Ping",
+        "arp_read": "در حال خواندن جدول ARP",
+        "active": "دستگاه‌های فعال (Ping OK)",
+        "arp_only": "بدون Ping ولی در ARP",
+        "incomplete": "ARP ناقص",
+        "total": "تعداد دستگاه‌ها (بدون خودت)",
+        "total_self": "تعداد کل با خودت",
+        "done": "عملیات با موفقیت انجام شد",
+        "stopped": "اسکن توسط کاربر متوقف شد"
+    }
+}
+
+T = TEXT.get(LANG, TEXT["en"])
+
+# =========================================================
+# =================== Core Configuration ==================
 # =========================================================
 
 NETWORK_BASE = "192.168.1."
 START = 1
 END = 255
-PING_TIMEOUT = "1"          # ثانیه
-PING_DELAY = 0.03           # تاخیر طبیعی بین پینگ‌ها (انسانی)
-ARP_READ_DELAY = 0.5        # مکث قبل از خواندن ARP
+
+PING_TIMEOUT = "1"
+BASE_DELAY = 0.03
+ARP_DELAY = 0.5
 
 # =========================================================
-# ===================== ابزارهای پایه =====================
+# ======================= Utilities =======================
 # =========================================================
 
 def ip_to_int(ip):
@@ -30,234 +84,167 @@ def ip_to_int(ip):
     except:
         return 0
 
-def progress_bar(current, total):
-    percent = int((current / total) * 100)
+def progress_bar(cur, total):
+    percent = int((cur / total) * 100)
     bar = "#" * (percent // 2) + "-" * (50 - percent // 2)
     sys.stdout.write(f"\r[{bar}] {percent}%")
     sys.stdout.flush()
 
 # =========================================================
-# ======================= Ping ساده =======================
+# ==================== MAC & Vendor =======================
 # =========================================================
 
-PING_RESULTS = {}
+OUI_DB = {
+    "001A79": "Apple",
+    "F099BF": "Samsung",
+    "1063C8": "Huawei",
+    "DCA632": "Xiaomi",
+    "0004ED": "TP-Link",
+    "FCFBFB": "Ubiquiti",
+    "D8EB97": "Intel",
+    "AC1203": "Cisco",
+    "BC926B": "ASUS",
+    "B827EB": "Raspberry Pi",
+    "080027": "VirtualBox",
+    "000569": "VMware"
+}
 
-def ping_ip(ip):
+def normalize_mac(mac):
+    if not mac or mac == "<incomplete>":
+        return None
+    return re.sub(r'[^0-9A-Fa-f]', '', mac).upper()
+
+def is_locally_administered(mac_hex):
     try:
-        r = subprocess.run(
-            ["ping", "-c", "1", "-W", PING_TIMEOUT, ip],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        return r.returncode == 0
+        first_octet = int(mac_hex[0:2], 16)
+        return bool(first_octet & 0b00000010)
     except:
         return False
 
+def get_vendor(mac):
+    mac_hex = normalize_mac(mac)
+    if not mac_hex:
+        return "Unknown"
+    if is_locally_administered(mac_hex):
+        return "Randomized / Locally Administered"
+    return OUI_DB.get(mac_hex[:6], "Unknown")
+
 # =========================================================
-# ==================== اطلاعات سیستم =====================
+# ================= System Information ====================
 # =========================================================
 
-def get_active_interface():
+def get_interface():
     try:
-        if shutil.which("ip") is None:
-            return "unknown"
-        route = subprocess.check_output(["ip", "route"], text=True, errors="ignore")
-        for line in route.splitlines():
-            if line.startswith("default") and "dev" in line:
-                return line.split()[line.split().index("dev") + 1]
+        out = subprocess.check_output(["ip", "route"], text=True)
+        for l in out.splitlines():
+            if l.startswith("default"):
+                return l.split()[l.split().index("dev") + 1]
     except:
         pass
     return "unknown"
 
 def get_my_ip():
     try:
-        out = subprocess.check_output(["hostname", "-I"], text=True).strip()
-        if out:
-            return out.split()[0]
-    except:
-        pass
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        return subprocess.check_output(["hostname", "-I"], text=True).split()[0]
     except:
         return "unknown"
 
-def get_my_mac(interface):
-    try:
-        if interface != "unknown":
-            with open(f"/sys/class/net/{interface}/address") as f:
-                return f.read().strip().lower()
-    except:
-        pass
-    return ""
-
 # =========================================================
-# ======================= Vendor DB =======================
+# ===================== ARP Reader ========================
 # =========================================================
 
-OUI_DB = {
-    "00:1A:79": "Apple",
-    "3C:5A:B4": "Google",
-    "F0:99:BF": "Samsung",
-    "DC:A6:32": "Xiaomi",
-    "B8:27:EB": "Raspberry Pi",
-    "08:00:27": "VirtualBox",
-    "00:05:69": "VMware",
-    "00:1C:42": "Parallels",
-    "00:04:ED": "TP-Link",
-    "10:63:C8": "Huawei",
-    "FC:FB:FB": "Ubiquiti",
-    "D8:EB:97": "Intel",
-    "AC:12:03": "Cisco",
-    "BC:92:6B": "ASUS",
-    "9A:6C:31": "Randomized MAC (Mobile)"
-}
-
-def normalize_mac(mac):
-    if not mac:
-        return ""
-    if mac.lower() == "<incomplete>":
-        return "<INCOMPLETE>"
-    hex_only = re.sub(r'[^0-9a-fA-F]', '', mac).upper()
-    if len(hex_only) < 6:
-        return mac.upper()
-    prefix = hex_only[:6]
-    return ":".join([prefix[i:i+2] for i in range(0, 6, 2)])
-
-def get_vendor(mac):
-    prefix = normalize_mac(mac)
-    if prefix == "<INCOMPLETE>":
-        return "Unknown"
-    return OUI_DB.get(prefix, "Unknown")
-
-# =========================================================
-# ===================== خواندن ARP ========================
-# =========================================================
-
-def parse_arp():
+def read_arp():
     entries = []
-
-    # اول ip neigh (طبیعی‌تر در لینوکس)
     try:
-        if shutil.which("ip"):
-            out = subprocess.check_output(["ip", "neigh"], text=True, errors="ignore")
-            for line in out.splitlines():
-                parts = line.split()
-                if not parts:
-                    continue
-                ip = parts[0]
-                mac = "<incomplete>"
-                if "lladdr" in parts:
-                    mac = parts[parts.index("lladdr") + 1]
-                entries.append({
-                    "ip": ip,
-                    "mac": mac,
-                    "vendor": get_vendor(mac)
-                })
-            if entries:
-                return entries
+        out = subprocess.check_output(["ip", "neigh"], text=True)
+        for l in out.splitlines():
+            p = l.split()
+            ip = p[0]
+            mac = "<incomplete>"
+            if "lladdr" in p:
+                mac = p[p.index("lladdr") + 1]
+            entries.append({
+                "ip": ip,
+                "mac": mac,
+                "vendor": get_vendor(mac)
+            })
     except:
         pass
-
-    # fallback: arp -a
-    try:
-        out = subprocess.check_output(["arp", "-a"], text=True, errors="ignore")
-        for line in out.splitlines():
-            m = re.search(r"\((.*?)\) at ([0-9a-f:]+)", line, re.I)
-            if m:
-                ip = m.group(1)
-                mac = m.group(2)
-                entries.append({
-                    "ip": ip,
-                    "mac": mac,
-                    "vendor": get_vendor(mac)
-                })
-    except:
-        pass
-
     return entries
 
 # =========================================================
-# ========================== main =========================
+# ========================= MAIN ==========================
 # =========================================================
 
 def main():
-    total_ips = END - START + 1
-    interface = get_active_interface()
+    iface = get_interface()
     my_ip = get_my_ip()
-    my_mac = normalize_mac(get_my_mac(interface))
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    print("\n[+] شروع اسکن شبکه (رفتار عادی و انسانی)")
-    print(f"[+] اینترفیس فعال: {interface}")
-    print(f"[+] IP سیستم: {my_ip}")
-    print(f"[+] رنج: {NETWORK_BASE}{START} → {NETWORK_BASE}{END}\n")
+    print("\n[INFO] {}        : {}".format(T["info_interface"], iface))
+    print("[INFO] {}             : {}".format(T["info_mode"], T["mode"]))
+    print("[INFO] {}    : {}0/24".format(T["info_network"], NETWORK_BASE))
+    print("[INFO] {}       : {} ms".format(T["info_delay"], int(BASE_DELAY*1000)))
+    print("[INFO] {}       : {}".format(T["info_arp"], T["arp_ip"]))
+    print("[INFO] {}       : {}\n".format(T["info_started"], now))
 
-    for idx, i in enumerate(range(START, END + 1), start=1):
+    print("[+] {}".format(T["scan_start"]))
+
+    total_ips = END - START + 1
+    ping_results = {}
+
+    for idx, i in enumerate(range(START, END + 1), 1):
         ip = f"{NETWORK_BASE}{i}"
-        alive = ping_ip(ip)
-        PING_RESULTS[ip] = alive
+        r = subprocess.run(
+            ["ping", "-c", "1", "-W", PING_TIMEOUT, ip],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        ping_results[ip] = (r.returncode == 0)
         progress_bar(idx, total_ips)
-        time.sleep(PING_DELAY)
+        time.sleep(BASE_DELAY)
 
-    print("\n\n[+] Ping scan تمام شد")
-    time.sleep(ARP_READ_DELAY)
+    print("\n[+] {}".format(T["ping_done"]))
+    time.sleep(ARP_DELAY)
 
-    print("\n[+] خواندن جدول ARP ...\n")
-    arp_entries = parse_arp()
+    print("\n[+] {}\n".format(T["arp_read"]))
+    arp = read_arp()
 
-    # حذف خود سیستم
-    filtered = []
-    for d in arp_entries:
+    active, arp_only, incomplete = [], [], []
+
+    for d in arp:
         if d["ip"] == my_ip:
             continue
-        if normalize_mac(d["mac"]) == my_mac:
-            continue
-        filtered.append(d)
-
-    ping_ok = []
-    arp_only = []
-    incomplete = []
-
-    for d in filtered:
-        ip = d["ip"]
-        mac_norm = normalize_mac(d["mac"])
-        if mac_norm == "<INCOMPLETE>":
+        if d["mac"] == "<incomplete>":
             incomplete.append(d)
-        elif PING_RESULTS.get(ip):
-            ping_ok.append(d)
+        elif ping_results.get(d["ip"]):
+            active.append(d)
         else:
             arp_only.append(d)
 
-    ping_ok.sort(key=lambda x: ip_to_int(x["ip"]))
+    active.sort(key=lambda x: ip_to_int(x["ip"]))
     arp_only.sort(key=lambda x: ip_to_int(x["ip"]))
     incomplete.sort(key=lambda x: ip_to_int(x["ip"]))
 
-    print("========== دستگاه‌های فعال (Ping OK) ==========")
-    for d in ping_ok:
+    print("========== {} ==========".format(T["active"]))
+    for d in active:
         print(f"✅ {d['ip']}  {d['mac']}  [{d['vendor']}]")
 
-    print("\n========== بدون Ping ولی در ARP ==========")
+    print("\n========== {} ==========".format(T["arp_only"]))
     for d in arp_only:
         print(f"⚠️  {d['ip']}  {d['mac']}  [{d['vendor']}]")
 
-    print("\n========== ARP Incomplete ==========")
+    print("\n========== {} ==========".format(T["incomplete"]))
     for d in incomplete:
         print(f"❌ {d['ip']}  <incomplete>")
 
-    total = len(ping_ok) + len(arp_only) + len(incomplete)
-
-    print("\n==========================================")
-    print(f"تعداد دستگاه‌ها (بدون خودت): {total}")
-    print(f"تعداد کل با خودت: {total + 1}")
-    print("[✓] عملیات با موفقیت انجام شد")
-
-# =========================================================
+    total = len(active) + len(arp_only) + len(incomplete)
+    print("\n{}: {}".format(T["total"], total))
+    print("{}: {}".format(T["total_self"], total + 1))
+    print("[✓] {}".format(T["done"]))
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n[!] اسکن توسط کاربر متوقف شد")
+        print("\n[!] {}".format(T["stopped"]))
