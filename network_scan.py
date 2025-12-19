@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import subprocess, sys, time, re, socket, struct, shutil, os
+import subprocess, sys, time, re, socket, struct, shutil, os, requests
 from datetime import datetime
 
 # =========================================================
@@ -140,6 +140,17 @@ def get_vendor(mac):
         return "Randomized / Locally Administered"
     return OUI_DB.get(mac_hex[:6],"Unknown")
 
+def get_vendor_online(mac):
+    mac = normalize_mac(mac)
+    if not mac: return "Unknown"
+    try:
+        r = requests.get(f"https://api.macvendors.com/{mac}", timeout=5)
+        if r.status_code == 200 and r.text:
+            return r.text
+    except:
+        pass
+    return "Unknown"
+
 # =========================================================
 # ================= System Information ====================
 # =========================================================
@@ -183,7 +194,10 @@ def read_arp():
             mac="<incomplete>"
             if "lladdr" in p:
                 mac=p[p.index("lladdr")+1]
-            entries.append({"ip":ip,"mac":mac,"vendor":get_vendor(mac)})
+            vendor=get_vendor(mac)
+            if vendor=="Unknown" and mac!="<incomplete>":
+                vendor=get_vendor_online(mac)
+            entries.append({"ip":ip,"mac":mac,"vendor":vendor})
     except:
         pass
     return entries
@@ -252,6 +266,7 @@ def perform_scan():
     print("\n{}: {}".format(T["total"],total))
     print("{}: {}".format(T["total_self"],total+1))
     print("[✓] {}".format(T["done"]))
+    input(f"{T['press_enter']}")
 
 def perform_update():
     print("\n[+] {}".format(T["updating"]))
@@ -265,10 +280,21 @@ def perform_uninstall():
     print("\n[+] {}".format(T["uninstalling"]))
     BIN_PATH="/usr/local/bin/netscan"
     INSTALL_DIR="/opt/network-scanner"
+
     if os.path.islink(BIN_PATH) or os.path.exists(BIN_PATH):
-        os.remove(BIN_PATH)
+        try:
+            os.remove(BIN_PATH)
+        except PermissionError:
+            print("[!] Permission denied for BIN_PATH, using sudo...")
+            subprocess.run(["sudo","rm","-f",BIN_PATH])
+
     if os.path.exists(INSTALL_DIR):
-        shutil.rmtree(INSTALL_DIR)
+        try:
+            shutil.rmtree(INSTALL_DIR)
+        except PermissionError:
+            print("[!] Permission denied for INSTALL_DIR, using sudo...")
+            subprocess.run(["sudo","rm","-rf",INSTALL_DIR])
+
     print("[✓] {}".format(T["uninstall_done"]))
     input(f"{T['press_enter']}")
 
