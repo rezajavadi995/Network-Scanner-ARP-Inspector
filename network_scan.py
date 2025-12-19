@@ -33,78 +33,126 @@ OUI_DB_FILE = f"{BASE_DIR}/oui.db"
 BIN_PATH = "/usr/local/bin/netscan"
 
 # =========================================================
-# ===================== Language ==========================
+# ===================== Language & Tone ===================
 # =========================================================
+
 NETSCAN_LANG = "en"
+NETSCAN_TONE = "human"   # human | neutral
+
 if os.path.exists(CONF_FILE):
     try:
         with open(CONF_FILE) as f:
             for line in f:
                 if line.startswith("NETSCAN_LANG="):
                     NETSCAN_LANG = line.strip().split("=", 1)[1]
+                elif line.startswith("NETSCAN_TONE="):
+                    NETSCAN_TONE = line.strip().split("=", 1)[1]
     except:
         pass
 
+
 TEXT = {
     "en": {
+        # ===== Menu =====
         "menu_title": "Network Scanner & ARP Inspector",
         "menu_option_scan": "1) Start Network Scan",
         "menu_option_update": "2) Update Script",
         "menu_option_uninstall": "3) Uninstall",
         "menu_option_exit": "4) Exit",
-        "prompt_choice": "Enter your choice:",
+        "prompt_choice": "Enter your choice",
+
+        # ===== Info Line =====
         "info_interface": "Interface",
         "info_mode": "Mode",
         "info_network": "Network Range",
         "info_delay": "Ping Delay",
         "info_arp": "ARP Source",
         "info_started": "Started At",
+
+        # ===== Mode =====
         "mode": "adaptive (human-like)",
         "arp_ip": "ip neigh",
+
+        # ===== Scan Flow =====
         "scan_start": "Starting network scan",
         "ping_done": "Ping scan completed",
         "arp_read": "Reading ARP table",
+
+        # ===== Results =====
         "active": "Active Devices (Ping OK)",
         "arp_only": "ARP Only (No Ping)",
         "incomplete": "ARP Incomplete",
         "total": "Total devices (excluding yourself)",
         "total_self": "Total with yourself",
+
+        # ===== Actions =====
         "done": "Operation completed successfully",
-        "updating": "Updating...",
-        "uninstalling": "Uninstalling...",
-        "press_enter": "Press Enter to continue..."
+        "updating": "Updating script...",
+        "uninstalling": "Uninstalling application...",
+
+        # ===== UX / Exit (Tone-aware) =====
+        "exit_human": "Session closed calmly. Nothing unusual happened.",
+        "exit_neutral": "Exited.",
+        "exit_uninstall": "Application removed successfully.",
+        "invalid_choice": "Invalid selection",
+        "press_enter": "Press Enter to continue...",
+
+        # ===== UI =====
+        "menu_width": 54
     },
+
     "fa": {
+        # ===== منو =====
         "menu_title": "Network Scanner & ARP Inspector",
         "menu_option_scan": "1) شروع اسکن شبکه",
-        "menu_option_update": "2) بروزرسانی",
+        "menu_option_update": "2) بروزرسانی اسکریپت",
         "menu_option_uninstall": "3) حذف برنامه",
         "menu_option_exit": "4) خروج",
-        "prompt_choice": "انتخاب شما:",
+        "prompt_choice": "انتخاب شما",
+
+        # ===== خط اطلاعات =====
         "info_interface": "اینترفیس",
         "info_mode": "حالت",
         "info_network": "رنج شبکه",
         "info_delay": "تاخیر پینگ",
         "info_arp": "منبع ARP",
         "info_started": "زمان شروع",
+
+        # ===== حالت =====
         "mode": "تطبیقی (رفتار انسانی)",
         "arp_ip": "ip neigh",
+
+        # ===== روند اسکن =====
         "scan_start": "شروع اسکن شبکه",
         "ping_done": "پایان اسکن Ping",
         "arp_read": "در حال خواندن جدول ARP",
+
+        # ===== نتایج =====
         "active": "دستگاه‌های فعال (Ping OK)",
         "arp_only": "بدون Ping ولی در ARP",
         "incomplete": "ARP ناقص",
         "total": "تعداد دستگاه‌ها (بدون خودت)",
         "total_self": "تعداد کل با خودت",
+
+        # ===== عملیات =====
         "done": "عملیات با موفقیت انجام شد",
         "updating": "در حال بروزرسانی...",
-        "uninstalling": "در حال حذف...",
-        "press_enter": "برای ادامه Enter بزنید..."
+        "uninstalling": "در حال حذف برنامه...",
+
+        # ===== خروج (وابسته به رفتار) =====
+        "exit_human": "خروج انجام شد. همه‌چیز عادی بود.",
+        "exit_neutral": "خروج انجام شد.",
+        "exit_uninstall": "برنامه با موفقیت حذف شد.",
+        "invalid_choice": "انتخاب نامعتبر",
+        "press_enter": "برای ادامه Enter بزنید...",
+
+        # ===== UI =====
+        "menu_width": 60
     }
 }
 
 T = TEXT.get(NETSCAN_LANG, TEXT["en"])
+MENU_WIDTH = T.get("menu_width", 54)
 
 # =========================================================
 # ===================== Network ===========================
@@ -316,28 +364,24 @@ def perform_uninstall():
 # =========================================================
 def main_menu():
     while True:
-        os.system("clear")
+        os.system("clear")  # پاک کردن صفحه برای ظاهر حرفه‌ای
 
         # ===== Header =====
         print(FG_CYAN + BOLD + "╔" + "═"*54 + "╗" + RESET)
-        print(
-            FG_CYAN + BOLD + "║" + RESET +
-            f"{T['menu_title']:^54}" +
-            FG_CYAN + BOLD + "║" + RESET
-        )
+        print(FG_CYAN + BOLD + "║" + RESET +
+              f"{T['menu_title']:^54}" +
+              FG_CYAN + BOLD + "║" + RESET)
         print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
 
         # ===== Info line =====
         iface = get_interface()
         now = datetime.now().strftime("%H:%M:%S")
 
-        print(
-            FG_GRAY + "║  " +
-            f"{T['info_interface']}: {iface:<10} | " +
-            f"{T['info_mode']}: {T['mode']:<18} | " +
-            f"{now:<6}" +
-            "  ║" + RESET
-        )
+        print(FG_GRAY + "║  " +
+              f"{T['info_interface']}: {iface:<10} | " +
+              f"{T['info_mode']}: {T['mode']:<18} | " +
+              f"{now:<6}" +
+              "  ║" + RESET)
 
         print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
 
@@ -350,31 +394,36 @@ def main_menu():
         print(FG_CYAN + BOLD + "╚" + "═"*54 + "╝" + RESET)
 
         # ===== Input =====
-        choice = input(
-            "\n" +
-            FG_GRAY + "› " + RESET +
-            BOLD + T["prompt_choice"] + " "
-        ).strip()
+        choice = input("\n" + FG_GRAY + "› " + RESET + BOLD + T["prompt_choice"] + " ").strip()
 
         # ===== Actions =====
         if choice == "1":
-            perform_scan()
+            perform_scan()  # اجرای اسکن شبکه
 
         elif choice == "2":
-            perform_update()
+            perform_update()  # بروزرسانی اسکریپت
 
         elif choice == "3":
-            perform_uninstall()
-            print("\n" + FG_GREEN + T["exit_uninstall"] + RESET)
+            perform_uninstall()  # حذف برنامه
+            # پیام خروج انسانی بعد از حذف
+            if NETSCAN_LANG == "fa":
+                print("\n" + FG_GREEN + T["exit_uninstall"] + " ✅" + RESET)
+            else:
+                print("\n" + FG_GREEN + T["exit_uninstall"] + " ✅" + RESET)
             time.sleep(0.8)
-            break
+            break  # خروج کامل از برنامه
 
         elif choice == "4":
-            print("\n" + FG_GREEN + T["exit_message"] + RESET)
+            # خروج طبیعی و انسانی
+            if NETSCAN_LANG == "fa":
+                print("\n" + FG_GREEN + T["exit_message"] + " 🌱" + RESET)
+            else:
+                print("\n" + FG_GREEN + T["exit_message"] + " 🌱" + RESET)
             time.sleep(0.8)
             break
 
         else:
+            # انتخاب نامعتبر با هشدار
             print(FG_RED + "\n[!] " + T["invalid_choice"] + RESET)
             time.sleep(1)
 if __name__ == "__main__":
