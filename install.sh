@@ -38,14 +38,32 @@ else
 fi
 
 # -------------------------------
-# پیش‌نیازها
+# بررسی پیش‌نیازها (اصلاح حرفه‌ای)
 # -------------------------------
-for cmd in python3 curl ip ping awk sort; do
-  if ! command -v $cmd >/dev/null 2>&1; then
-    sudo apt update
-    sudo apt install -y $cmd
+REQUIRED_PACKAGES=(
+  python3
+  curl
+  iproute2
+  iputils-ping
+  awk
+  coreutils
+)
+
+echo
+echo "[+] Checking system dependencies..."
+
+NEED_UPDATE=false
+for pkg in "${REQUIRED_PACKAGES[@]}"; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    NEED_UPDATE=true
+    break
   fi
 done
+
+if $NEED_UPDATE; then
+  sudo apt update
+  sudo apt install -y "${REQUIRED_PACKAGES[@]}"
+fi
 
 # -------------------------------
 # ساخت مسیر نصب
@@ -97,7 +115,6 @@ if [[ ! -s "$RAW_FILE" ]]; then
   exit 1
 fi
 
-# تبدیل به فرمت بهینه OUI|Vendor
 awk '
 BEGIN { FS=" "; OFS="|" }
 {
