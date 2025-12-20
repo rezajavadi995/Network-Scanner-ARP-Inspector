@@ -298,6 +298,10 @@ def perform_scan():
             stderr=subprocess.DEVNULL
         )
         ping_ok[ip] = (r.returncode == 0)
+        # نمایش پیشرفت
+        percent = int(((i-START+1)/(END-START+1))*100)
+        sys.stdout.write(f"\rScanning {ip}... {percent}%")
+        sys.stdout.flush()
         time.sleep(BASE_DELAY)
 
     print(f"\n[+] {T['ping_done']}")
