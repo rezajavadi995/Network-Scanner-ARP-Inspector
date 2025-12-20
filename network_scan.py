@@ -371,6 +371,8 @@ def main_menu():
         os.system("clear")  # پاک کردن صفحه برای ظاهر حرفه‌ای
 
         # ===== Header =====
+        
+
         print(FG_CYAN + BOLD + "╔" + "═"*54 + "╗" + RESET)
         print(FG_CYAN + BOLD + "║" + RESET +
               f"{T['menu_title']:^54}" +
@@ -389,11 +391,13 @@ def main_menu():
 
         print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
 
-        # ===== Menu options =====
-        print(FG_GREEN  + "║  [1] ▶  " + RESET + T["menu_option_scan"][3:].ljust(40) + "║")
-        print(FG_BLUE   + "║  [2] ⟳  " + RESET + T["menu_option_update"][3:].ljust(40) + "║")
-        print(FG_YELLOW + "║  [3] ✖  " + RESET + T["menu_option_uninstall"][3:].ljust(40) + "║")
-        print(FG_RED    + "║  [4] ⏻  " + RESET + T["menu_option_exit"][3:].ljust(40) + "║")
+       # ===== Menu options با فاصله دقیق =====
+        menu_width = 50  # عرض داخلی جدول
+
+        print(FG_GREEN  + "║  [1] ▶  " + RESET + T["menu_option_scan"][3:].ljust(menu_width) + "║")
+        print(FG_BLUE   + "║  [2] ⟳  " + RESET + T["menu_option_update"][3:].ljust(menu_width) + "║")
+        print(FG_YELLOW + "║  [3] ✖  " + RESET + T["menu_option_uninstall"][3:].ljust(menu_width) + "║")
+        print(FG_RED    + "║  [4] ⏻  " + RESET + T["menu_option_exit"][3:].ljust(menu_width) + "║")
 
         print(FG_CYAN + BOLD + "╚" + "═"*54 + "╝" + RESET)
 
