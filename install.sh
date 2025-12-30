@@ -97,7 +97,7 @@ mkdir -p "$TMP_DIR"
 RAW_FILE="$TMP_DIR/oui_raw.txt"
 
 curl -# -fsSL \
-https://gist.githubusercontent.com/aallan/b4bb86db86079509e6159810ae9bd3e4/raw \
+https://standards-oui.ieee.org/oui/oui.txt \
 -o "$RAW_FILE"
 
 if [[ ! -s "$RAW_FILE" ]]; then
