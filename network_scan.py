@@ -169,6 +169,17 @@ TEXT = {
 T = TEXT.get(NETSCAN_LANG, TEXT["en"])
 MENU_WIDTH = T.get("menu_width", 54)
 
+
+
+def Tget(key):
+    """
+    FA: گرفتن متن امن از دیکشنری زبان
+    EN: Safely fetch localized text with fallback
+    """
+    try:
+        return T.get(key, TEXT["en"].get(key, key))
+    except Exception:
+        return key
 # =========================================================
 # ===================== Network ===========================
 # =========================================================
