@@ -199,6 +199,65 @@ def is_locally_administered(mac_hex):
     except:
         return False
 
+
+def box_width(min_width=40, max_width=100):
+    try:
+        cols = shutil.get_terminal_size().columns
+        return max(min_width, min(cols - 4, max_width))
+    except:
+        return min_width
+
+def pad(text, width):
+    if len(text) > width:
+        return text[:width]
+    return text.ljust(width)
+
+
+######
+def run_update():
+    """
+    FA: اجرای فرآیند بروزرسانی با پیام واضح و کنترل کامل
+    EN: Run update process with clear status, protection, and feedback
+    """
+    os.system("clear")  # FA: پاک‌کردن صفحه قبل از شروع / EN: clear screen before starting
+
+    print(FG_BLUE + BOLD + "=== UPDATE MODE ===" + RESET)
+    print(FG_GRAY + "Updating... please wait." + RESET)
+    print(FG_YELLOW + "Do NOT press Ctrl+C." + RESET)
+    print()
+    time.sleep(0.5)  # FA: مکث کوتاه برای نمایش پیام / EN: short pause to show messages
+
+    try:
+        # FA: اجرای بروزرسانی واقعی با نمایش خروجی لحظه‌ای / EN: Run actual update with live output
+        process = subprocess.Popen(
+            ["python3", f"{BASE_DIR}/network_scan.py", "--update"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True
+        )
+
+        # FA: خواندن خروجی خط به خط و نمایش لحظه‌ای / EN: Read and print live output
+        while True:
+            output = process.stdout.readline()
+            if output == "" and process.poll() is not None:
+                break
+            if output:
+                print(FG_CYAN + output.rstrip() + RESET)
+
+        retcode = process.poll()
+        if retcode == 0:
+            print("\n" + FG_GREEN + "[✓] Update completed successfully." + RESET)
+        else:
+            print("\n" + FG_RED + "[✗] Update failed." + RESET)
+
+    except KeyboardInterrupt:
+        # FA: مدیریت Ctrl+C / EN: Handle Ctrl+C safely
+        print("\n" + FG_RED + "[!] Update interrupted by user!" + RESET)
+        print(FG_YELLOW + "System state may be inconsistent." + RESET)
+
+    input("\nPress Enter to return to menu...")  # FA: صبر برای بازگشت / EN: wait before returning
+
+
 # ===================== Interface Reality Detection =====================
 def detect_interface_mode(iface):
     """
@@ -475,22 +534,32 @@ def main_menu():
     while True:
         os.system("clear")
 
-        print(FG_CYAN + BOLD + "╔" + "═"*MENU_WIDTH + "╗" + RESET)
-        print(FG_CYAN + BOLD + "║" + RESET + f"{T['menu_title']:^{MENU_WIDTH}}" + FG_CYAN + BOLD + "║" + RESET)
-        print(FG_CYAN + BOLD + "╠" + "═"*MENU_WIDTH + "╣" + RESET)
+        W = box_width()  # FA: پیدا کردن عرض مناسب ترمینال / EN: detect proper terminal width
+        title = T["menu_title"]
 
-        print(FG_GREEN  + "║  [1] ▶  " + RESET + T["menu_option_scan"][3:].ljust(MENU_WIDTH-8) + "║")
-        print(FG_BLUE   + "║  [2] ⟳  " + RESET + T["menu_option_update"][3:].ljust(MENU_WIDTH-8) + "║")
-        print(FG_YELLOW + "║  [3] ✖  " + RESET + T["menu_option_uninstall"][3:].ljust(MENU_WIDTH-8) + "║")
-        print(FG_RED    + "║  [4] ⏻  " + RESET + T["menu_option_exit"][3:].ljust(MENU_WIDTH-8) + "║")
-        print(FG_CYAN + BOLD + "╚" + "═"*MENU_WIDTH + "╝" + RESET)
+        print(FG_CYAN + BOLD + "╔" + "═"*W + "╗" + RESET)
+        print(FG_CYAN + BOLD + "║" + RESET + f"{title:^{W}}" + FG_CYAN + BOLD + "║" + RESET)
+        print(FG_CYAN + BOLD + "╠" + "═"*W + "╣" + RESET)
 
-        choice = input("\n" + T["prompt_choice"] + " > ").strip()
+        # FA: منوی اصلی با padding درست / EN: main menu with correct padding
+        print(FG_GREEN  + "║  [1] ▶  " + RESET + pad(T["menu_option_scan"][3:], W-8) + FG_GREEN  + "║" + RESET)
+        print(FG_BLUE   + "║  [2] ⟳  " + RESET + pad(T["menu_option_update"][3:], W-8) + FG_BLUE   + "║" + RESET)
+        print(FG_YELLOW + "║  [3] ✖  " + RESET + pad(T["menu_option_uninstall"][3:], W-8) + FG_YELLOW + "║" + RESET)
+        print(FG_RED    + "║  [4] ⏻  " + RESET + pad(T["menu_option_exit"][3:], W-8) + FG_RED    + "║" + RESET)
+
+        print(FG_CYAN + BOLD + "╚" + "═"*W + "╝" + RESET)
+
+        try:
+            choice = input("\n" + T["prompt_choice"] + " > ").strip()
+        except KeyboardInterrupt:
+            print("\n" + FG_YELLOW + "[!] Use menu option to exit safely" + RESET)
+            time.sleep(1)
+            continue
 
         if choice == "1":
-            perform_scan()
+            perform_scan()  # FA: اجرای اسکن شبکه / EN: run network scan
         elif choice == "2":
-            subprocess.run(["python3", f"{BASE_DIR}/network_scan.py"])
+            run_update()  # FA: اجرای آپدیت / EN: run update safely
         elif choice == "3":
             subprocess.run(["sudo", "rm", "-f", BIN_PATH])
             subprocess.run(["sudo", "rm", "-rf", BASE_DIR])
@@ -503,6 +572,5 @@ def main_menu():
         else:
             print(FG_RED + T["invalid_choice"] + RESET)
             time.sleep(1)
-
 if __name__ == "__main__":
     main_menu()
