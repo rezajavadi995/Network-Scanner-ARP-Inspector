@@ -319,15 +319,40 @@ def read_arp():
         pass
     return entries
 
+
+
+# ===================== Network Range Flow =====================
+def network_range_flow():
+    """
+    FA: تشخیص و مدیریت تغییر رنج شبکه
+    EN: Detect and optionally change network range
+    """
+    net = detect_network_range()
+    print(f"\n[INFO] {Tget('range_detected')} : {net}")
+
+    ans = input(f"[?] {Tget('range_change')} ").strip().lower()
+    if ans == "y":
+        print(FG_YELLOW + Tget("range_back") + RESET)
+        time.sleep(1)
+        return None  # signal back to menu
+
+    return net
+
 # =========================================================
 # ===================== Scan ==============================
 # =========================================================
 def perform_scan():
     global NETWORK_BASE, START, END
-
+"""
     iface = get_interface()
     net = detect_network_range()
+"""
+    iface = get_interface()
+    net = network_range_flow()
 
+
+    if net is None:
+        return
     print(f"\n[INFO] {T['range_detected']} : {net}")
     ans = input(f"[?] {T['range_change']} ").strip().lower()
     if ans == "y":
