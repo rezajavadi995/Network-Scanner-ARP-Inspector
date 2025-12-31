@@ -440,12 +440,12 @@ def network_range_flow():
 # =========================================================
 def perform_scan():
     global NETWORK_BASE, START, END
-"""
-    iface = get_interface()
-    net = detect_network_range()
-"""
+
     iface = get_interface()
     net = network_range_flow()
+    
+    
+
 
 
     if net is None:
