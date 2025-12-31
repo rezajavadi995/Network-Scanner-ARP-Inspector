@@ -212,52 +212,76 @@ def pad(text, width):
         return text[:width]
     return text.ljust(width)
 
-
+def ensure_safe_cwd():
+    """
+    FA: اطمینان از اینکه دایرکتوری کاری معتبر است
+    EN: Ensure current working directory is valid
+    """
+    try:
+        os.getcwd()
+    except FileNotFoundError:
+        # FA: اگر مسیر فعلی وجود نداشت، برگرد به مسیر امن
+        # EN: If current directory is gone, switch to safe path
+        try:
+            os.chdir(BASE_DIR)
+        except:
+            os.chdir("/")
 ######
 def run_update():
     """
     FA: اجرای فرآیند بروزرسانی با پیام واضح و کنترل کامل
     EN: Run update process with clear status, protection, and feedback
     """
+    ensure_safe_cwd()
     os.system("clear")  # FA: پاک‌کردن صفحه قبل از شروع / EN: clear screen before starting
 
     print(FG_BLUE + BOLD + "=== UPDATE MODE ===" + RESET)
     print(FG_GRAY + "Updating... please wait." + RESET)
     print(FG_YELLOW + "Do NOT press Ctrl+C." + RESET)
     print()
-    time.sleep(0.5)  # FA: مکث کوتاه برای نمایش پیام / EN: short pause to show messages
+    time.sleep(0.5)
+
+    # FA: ذخیره وضعیت قبلی Ctrl+C / EN: Save previous SIGINT handler
+    old_sigint = signal.getsignal(signal.SIGINT)
 
     try:
-        # FA: اجرای بروزرسانی واقعی با نمایش خروجی لحظه‌ای / EN: Run actual update with live output
+        # FA: غیرفعال‌کردن Ctrl+C در زمان بروزرسانی
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        # FA: اجرای بروزرسانی با خروجی زنده
         process = subprocess.Popen(
             ["python3", f"{BASE_DIR}/network_scan.py", "--update"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True
+            text=True,
+            bufsize=1
         )
 
-        # FA: خواندن خروجی خط به خط و نمایش لحظه‌ای / EN: Read and print live output
-        while True:
-            output = process.stdout.readline()
-            if output == "" and process.poll() is not None:
-                break
-            if output:
-                print(FG_CYAN + output.rstrip() + RESET)
+        # FA: نمایش خروجی خط‌به‌خط به‌صورت امن
+        if process.stdout:
+            for line in iter(process.stdout.readline, ""):
+                if line == "" and process.poll() is not None:
+                    break
+                if line:
+                    print(FG_CYAN + line.rstrip() + RESET)
 
-        retcode = process.poll()
+        retcode = process.wait()
+
         if retcode == 0:
             print("\n" + FG_GREEN + "[✓] Update completed successfully." + RESET)
         else:
             print("\n" + FG_RED + "[✗] Update failed." + RESET)
 
     except KeyboardInterrupt:
-        # FA: مدیریت Ctrl+C / EN: Handle Ctrl+C safely
+        # FA: این حالت عملاً نباید رخ دهد، ولی ایمن‌سازی شده
         print("\n" + FG_RED + "[!] Update interrupted by user!" + RESET)
         print(FG_YELLOW + "System state may be inconsistent." + RESET)
 
-    input("\nPress Enter to return to menu...")  # FA: صبر برای بازگشت / EN: wait before returning
+    finally:
+        # FA: بازگرداندن Ctrl+C به حالت قبل (خیلی مهم)
+        signal.signal(signal.SIGINT, old_sigint)
 
-
+    input("\nPress Enter to return to menu...")
 # ===================== Interface Reality Detection =====================
 def detect_interface_mode(iface):
     """
