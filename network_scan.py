@@ -199,29 +199,49 @@ def is_locally_administered(mac_hex):
     except:
         return False
 
-# =========================================================
-# ===================== Interface Detection ===============
-# =========================================================
+# ===================== Interface Reality Detection =====================
 def detect_interface_mode(iface):
+    """
+    FA: تشخیص واقعی نوع اتصال (Wi-Fi / NAT / Bridge)
+    EN: Real interface mode detection
+    """
     warnings = []
 
+    # ---- Wi-Fi detection ----
     try:
-        if iface.startswith("wlan"):
-            warnings.append(T["iface_wifi"])
-            warnings.append(T["iface_gateway"])
-            warnings.append(T["iface_arp_limited"])
+        if os.path.exists(f"/sys/class/net/{iface}/wireless"):
+            warnings.append(Tget("iface_wifi"))
     except:
         pass
 
+    # ---- NAT / Bridge detection ----
     try:
         out = subprocess.check_output(["ip", "route"], text=True)
-        if "vbox" in out.lower():
-            warnings.append(T["iface_nat"])
-            warnings.append(T["iface_nat_warn"])
+        if "default via" in out:
+            for line in out.splitlines():
+                if "default via" in line and iface in line:
+                    gw = line.split()[2]
+                    if gw.startswith("10.") or gw.startswith("192.168."):
+                        warnings.append(Tget("iface_gateway"))
+    except:
+        pass
+
+    # ---- Virtualization detection ----
+    try:
+        ethtool = subprocess.check_output(
+            ["ethtool", "-i", iface],
+            stderr=subprocess.DEVNULL,
+            text=True
+        )
+        if "virtual" in ethtool.lower():
+            warnings.append(Tget("iface_nat"))
+            warnings.append(Tget("iface_nat_warn"))
     except:
         pass
 
     return warnings
+
+
 
 # =========================================================
 # ===================== Dynamic Network ===================
@@ -321,6 +341,20 @@ def read_arp():
 
 
 
+
+
+# ===================== Persistent Config =====================
+def save_network_range(net):
+    """
+    FA: ذخیره رنج شبکه
+    EN: Save detected network range
+    """
+    try:
+        with open(CONF_FILE, "a") as f:
+            f.write(f"\nNETWORK_RANGE={net}\n")
+    except:
+        pass
+
 # ===================== Network Range Flow =====================
 def network_range_flow():
     """
@@ -336,7 +370,11 @@ def network_range_flow():
         time.sleep(1)
         return None  # signal back to menu
 
+    
+    save_network_range(net)
     return net
+
+
 
 # =========================================================
 # ===================== Scan ==============================
