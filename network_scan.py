@@ -10,6 +10,7 @@ import struct
 import shutil
 import os
 from datetime import datetime
+import ipaddress
 
 # ===================== Colors ===========================
 RESET   = "\033[0m"
@@ -48,8 +49,12 @@ if os.path.exists(CONF_FILE):
     except:
         pass
 
+# =========================================================
+# ===================== TEXT (FULL MERGED) ================
+# =========================================================
 TEXT = {
     "en": {
+        # ---- Menu ----
         "menu_title": "Network Scanner & ARP Inspector",
         "menu_option_scan": "1) Start Network Scan",
         "menu_option_update": "2) Update Script",
@@ -57,6 +62,7 @@ TEXT = {
         "menu_option_exit": "4) Exit",
         "prompt_choice": "Enter your choice",
 
+        # ---- Info ----
         "info_interface": "Interface",
         "info_mode": "Mode",
         "info_network": "Network Range",
@@ -67,6 +73,7 @@ TEXT = {
         "mode": "adaptive (human-like)",
         "arp_ip": "ip neigh",
 
+        # ---- Scan ----
         "scan_start": "Starting network scan",
         "ping_done": "Ping scan completed",
         "arp_read": "Reading ARP table",
@@ -74,18 +81,33 @@ TEXT = {
         "active": "Active Devices (Ping OK)",
         "arp_only": "ARP Only (No Ping)",
         "incomplete": "ARP Incomplete",
+
         "total": "Total devices (excluding yourself)",
         "total_self": "Total with yourself",
 
         "done": "Operation completed successfully",
-        "updating": "Updating script...",
-        "uninstalling": "Uninstalling application...",
+        "press_enter": "Press Enter to continue...",
 
+        # ---- Exit ----
         "exit_human": "Session closed calmly. Nothing unusual happened.",
         "exit_neutral": "Exited.",
+        "exit_message": "Exited normally.",
         "exit_uninstall": "Application removed successfully.",
+
         "invalid_choice": "Invalid selection",
-        "press_enter": "Press Enter to continue...",
+
+        # ---- Dynamic Network ----
+        "range_detected": "Detected network range",
+        "range_change": "Do you want to change the network range? (Y/N)",
+        "range_keep": "Keeping current network range",
+        "range_back": "Returning to menu to change range",
+
+        # ---- Interface Warnings ----
+        "iface_nat": "Interface is NAT (VirtualBox)",
+        "iface_nat_warn": "Network scan results may be incomplete",
+        "iface_wifi": "Interface Mode : Wi-Fi (Managed)",
+        "iface_gateway": "Gateway Detected",
+        "iface_arp_limited": "ARP visibility : Limited",
 
         "menu_width": 54
     },
@@ -115,18 +137,30 @@ TEXT = {
         "active": "دستگاه‌های فعال (Ping OK)",
         "arp_only": "بدون Ping ولی در ARP",
         "incomplete": "ARP ناقص",
+
         "total": "تعداد دستگاه‌ها (بدون خودت)",
         "total_self": "تعداد کل با خودت",
 
         "done": "عملیات با موفقیت انجام شد",
-        "updating": "در حال بروزرسانی...",
-        "uninstalling": "در حال حذف برنامه...",
+        "press_enter": "برای ادامه Enter بزنید...",
 
         "exit_human": "خروج انجام شد. همه‌چیز عادی بود.",
         "exit_neutral": "خروج انجام شد.",
+        "exit_message": "خروج عادی انجام شد.",
         "exit_uninstall": "برنامه با موفقیت حذف شد.",
+
         "invalid_choice": "انتخاب نامعتبر",
-        "press_enter": "برای ادامه Enter بزنید...",
+
+        "range_detected": "رنج شبکه شناسایی شد",
+        "range_change": "آیا می‌خواهید رنج شبکه را تغییر دهید؟ (Y/N)",
+        "range_keep": "رنج فعلی حفظ شد",
+        "range_back": "بازگشت به منو برای تغییر رنج",
+
+        "iface_nat": "اینترفیس در حالت NAT (VirtualBox)",
+        "iface_nat_warn": "نتایج اسکن ممکن است ناقص باشند",
+        "iface_wifi": "حالت اینترفیس : وای‌فای (Managed)",
+        "iface_gateway": "گیت‌وی شناسایی شد",
+        "iface_arp_limited": "دسترسی ARP محدود است",
 
         "menu_width": 60
     }
@@ -166,7 +200,46 @@ def is_locally_administered(mac_hex):
         return False
 
 # =========================================================
-# ===================== OUI DB (IEEE) =====================
+# ===================== Interface Detection ===============
+# =========================================================
+def detect_interface_mode(iface):
+    warnings = []
+
+    try:
+        if iface.startswith("wlan"):
+            warnings.append(T["iface_wifi"])
+            warnings.append(T["iface_gateway"])
+            warnings.append(T["iface_arp_limited"])
+    except:
+        pass
+
+    try:
+        out = subprocess.check_output(["ip", "route"], text=True)
+        if "vbox" in out.lower():
+            warnings.append(T["iface_nat"])
+            warnings.append(T["iface_nat_warn"])
+    except:
+        pass
+
+    return warnings
+
+# =========================================================
+# ===================== Dynamic Network ===================
+# =========================================================
+def detect_network_range():
+    try:
+        iface = get_interface()
+        out = subprocess.check_output(["ip", "-4", "addr", "show", iface], text=True)
+        for line in out.splitlines():
+            if "inet " in line:
+                cidr = line.split()[1]
+                return ipaddress.ip_network(cidr, strict=False)
+    except:
+        pass
+    return ipaddress.ip_network("192.168.1.0/24")
+
+# =========================================================
+# ===================== OUI DB =============================
 # =========================================================
 _OUI_CACHE = None
 
@@ -190,12 +263,9 @@ def get_vendor(mac):
     mac_hex = normalize_mac(mac)
     if not mac_hex:
         return "Unknown"
-
     if is_locally_administered(mac_hex):
         return "Randomized / Locally Administered"
-
-    oui = mac_hex[:6]
-    return load_oui_db().get(oui, "Unknown")
+    return load_oui_db().get(mac_hex[:6], "Unknown")
 
 # =========================================================
 # ===================== System ===========================
@@ -253,18 +323,32 @@ def read_arp():
 # ===================== Scan ==============================
 # =========================================================
 def perform_scan():
+    global NETWORK_BASE, START, END
+
     iface = get_interface()
+    net = detect_network_range()
+
+    print(f"\n[INFO] {T['range_detected']} : {net}")
+    ans = input(f"[?] {T['range_change']} ").strip().lower()
+    if ans == "y":
+        print(FG_YELLOW + T["range_back"] + RESET)
+        time.sleep(1)
+        return
+
+    NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
+    START = 1
+    END = net.num_addresses - 2
+
+    for w in detect_interface_mode(iface):
+        print(FG_YELLOW + "[WARN] " + w + RESET)
+
     my_ip = get_my_ip()
     my_mac_raw = get_my_mac(iface)
-    my_mac = normalize_mac(my_mac_raw)
     my_vendor = get_vendor(my_mac_raw)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     print(f"\n[INFO] {T['info_interface']} : {iface}")
-    print(f"[INFO] {T['info_mode']} : {T['mode']}")
-    print(f"[INFO] {T['info_network']} : {NETWORK_BASE}0/24")
-    print(f"[INFO] {T['info_delay']} : {int(BASE_DELAY*1000)} ms")
-    print(f"[INFO] {T['info_arp']} : {T['arp_ip']}")
+    print(f"[INFO] {T['info_network']} : {net}")
     print(f"[INFO] {T['info_started']} : {now}\n")
 
     print(FG_CYAN + BOLD + "[Local Device]" + RESET)
@@ -275,7 +359,6 @@ def perform_scan():
     print(f"[+] {T['scan_start']}")
 
     ping_ok = {}
-
     for i in range(START, END + 1):
         ip = f"{NETWORK_BASE}{i}"
         r = subprocess.run(
@@ -300,8 +383,6 @@ def perform_scan():
     for d in arp:
         if d["ip"] == my_ip:
             continue
-        if normalize_mac(d["mac"]) == my_mac:
-            continue
         if d["mac"] == "<incomplete>":
             incomplete.append(d)
         elif ping_ok.get(d["ip"]):
@@ -309,25 +390,18 @@ def perform_scan():
         else:
             arp_only.append(d)
 
-    active.sort(key=lambda x: ip_to_int(x["ip"]))
-    arp_only.sort(key=lambda x: ip_to_int(x["ip"]))
-    incomplete.sort(key=lambda x: ip_to_int(x["ip"]))
+    for title, data, icon in [
+        (T["active"], active, "✅"),
+        (T["arp_only"], arp_only, "⚠️"),
+        (T["incomplete"], incomplete, "❌")
+    ]:
+        print(f"\n========== {title} ==========")
+        for d in data:
+            print(f"{icon} {d['ip']}  {d['mac']}  [{d['vendor']}]")
 
-    print(f"========== {T['active']} ==========")
-    for d in active:
-        print(f"✅ {d['ip']}  {d['mac']}  [{d['vendor']}]")
-
-    print(f"\n========== {T['arp_only']} ==========")
-    for d in arp_only:
-        print(f"⚠️  {d['ip']}  {d['mac']}  [{d['vendor']}]")
-
-    print(f"\n========== {T['incomplete']} ==========")
-    for d in incomplete:
-        print(f"❌ {d['ip']}  <incomplete>")
-
-    total_found = len(active) + len(arp_only) + len(incomplete)
-    print(f"\n{T['total']}: {total_found}")
-    print(f"{T['total_self']}: {total_found + 1}")
+    total = len(active) + len(arp_only) + len(incomplete)
+    print(f"\n{T['total']}: {total}")
+    print(f"{T['total_self']}: {total + 1}")
     print(f"[✓] {T['done']}")
     input(T["press_enter"])
 
@@ -338,48 +412,33 @@ def main_menu():
     while True:
         os.system("clear")
 
-        print(FG_CYAN + BOLD + "╔" + "═"*54 + "╗" + RESET)
-        print(FG_CYAN + BOLD + "║" + RESET + f"{T['menu_title']:^54}" + FG_CYAN + BOLD + "║" + RESET)
-        print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
+        print(FG_CYAN + BOLD + "╔" + "═"*MENU_WIDTH + "╗" + RESET)
+        print(FG_CYAN + BOLD + "║" + RESET + f"{T['menu_title']:^{MENU_WIDTH}}" + FG_CYAN + BOLD + "║" + RESET)
+        print(FG_CYAN + BOLD + "╠" + "═"*MENU_WIDTH + "╣" + RESET)
 
-        iface = get_interface()
-        now = datetime.now().strftime("%H:%M:%S")
+        print(FG_GREEN  + "║  [1] ▶  " + RESET + T["menu_option_scan"][3:].ljust(MENU_WIDTH-8) + "║")
+        print(FG_BLUE   + "║  [2] ⟳  " + RESET + T["menu_option_update"][3:].ljust(MENU_WIDTH-8) + "║")
+        print(FG_YELLOW + "║  [3] ✖  " + RESET + T["menu_option_uninstall"][3:].ljust(MENU_WIDTH-8) + "║")
+        print(FG_RED    + "║  [4] ⏻  " + RESET + T["menu_option_exit"][3:].ljust(MENU_WIDTH-8) + "║")
+        print(FG_CYAN + BOLD + "╚" + "═"*MENU_WIDTH + "╝" + RESET)
 
-        print(FG_GRAY + "║  " +
-              f"{T['info_interface']}: {iface:<10} | " +
-              f"{T['info_mode']}: {T['mode']:<18} | " +
-              f"{now:<6}" +
-              "  ║" + RESET)
-
-        print(FG_CYAN + BOLD + "╠" + "═"*54 + "╣" + RESET)
-
-        menu_width = 50
-        print(FG_GREEN  + "║  [1] ▶  " + RESET + T["menu_option_scan"][3:].ljust(menu_width) + "║")
-        print(FG_BLUE   + "║  [2] ⟳  " + RESET + T["menu_option_update"][3:].ljust(menu_width) + "║")
-        print(FG_YELLOW + "║  [3] ✖  " + RESET + T["menu_option_uninstall"][3:].ljust(menu_width) + "║")
-        print(FG_RED    + "║  [4] ⏻  " + RESET + T["menu_option_exit"][3:].ljust(menu_width) + "║")
-        print(FG_CYAN + BOLD + "╚" + "═"*54 + "╝" + RESET)
-
-        choice = input("\n" + FG_GRAY + "› " + RESET + BOLD + T["prompt_choice"] + " ").strip()
+        choice = input("\n" + T["prompt_choice"] + " > ").strip()
 
         if choice == "1":
             perform_scan()
         elif choice == "2":
             subprocess.run(["python3", f"{BASE_DIR}/network_scan.py"])
         elif choice == "3":
-            print(f"[+] {T['uninstalling']}")
             subprocess.run(["sudo", "rm", "-f", BIN_PATH])
             subprocess.run(["sudo", "rm", "-rf", BASE_DIR])
-            print("\n" + FG_GREEN + T["exit_uninstall"] + RESET)
-            time.sleep(0.8)
+            print(FG_GREEN + T["exit_uninstall"] + RESET)
             break
         elif choice == "4":
-            exit_msg = T["exit_human"] if NETSCAN_TONE == "human" else T["exit_neutral"]
-            print("\n" + FG_GREEN + exit_msg + RESET)
-            time.sleep(0.8)
+            msg = T["exit_human"] if NETSCAN_TONE == "human" else T["exit_neutral"]
+            print(FG_GREEN + msg + RESET)
             break
         else:
-            print(FG_RED + "\n[!] " + T["invalid_choice"] + RESET)
+            print(FG_RED + T["invalid_choice"] + RESET)
             time.sleep(1)
 
 if __name__ == "__main__":
