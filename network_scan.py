@@ -448,24 +448,50 @@ def save_network_range(net):
             f.write(f"\nNETWORK_RANGE={net}\n")
     except:
         pass
+def load_network_range():
+    """
+    FA: بارگذاری رنج ذخیره‌شده
+    EN: Load saved network range if exists
+    """
+    if not os.path.exists(CONF_FILE):
+        return None
 
+    try:
+        with open(CONF_FILE) as f:
+            for line in f:
+                if line.startswith("NETWORK_RANGE="):
+                    return ipaddress.ip_network(
+                        line.strip().split("=", 1)[1],
+                        strict=False
+                    )
+    except Exception:
+        pass
+
+    return None
 # ===================== Network Range Flow =====================
 def network_range_flow():
     """
-    FA: تشخیص و مدیریت تغییر رنج شبکه
-    EN: Detect and optionally change network range
+    FA: تشخیص، نمایش، تغییر و ذخیره رنج شبکه
+    EN: Detect, show, change and persist network range
     """
-    net = detect_network_range()
+    # FA: اگر قبلاً ذخیره شده، اولویت دارد
+    saved = load_network_range()
+    net = saved if saved else detect_network_range()
+
     print(f"\n[INFO] {Tget('range_detected')} : {net}")
 
     ans = input(f"[?] {Tget('range_change')} ").strip().lower()
+
     if ans == "y":
         print(FG_YELLOW + Tget("range_back") + RESET)
         time.sleep(1)
-        return None  # signal back to menu
+        return None  # برگشت به منو
 
-    
+    # FA: ذخیره رنج تأییدشده
     save_network_range(net)
+    print(FG_GREEN + Tget("range_keep") + RESET)
+    time.sleep(0.5)
+
     return net
 
 
@@ -478,6 +504,8 @@ def perform_scan():
 
     iface = get_interface()
     net = network_range_flow()
+    if net is None:
+        return
     
     
 
