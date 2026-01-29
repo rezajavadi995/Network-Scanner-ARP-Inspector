@@ -556,49 +556,58 @@ def perform_scan():
     global NETWORK_BASE, START, END
 
     iface = get_interface()
+
+    # ---- Range decision (ONLY here) ----
     net = network_range_flow()
     if net is None:
-        return
-    
-    
-
-
-
-    if net is None:
-        return
-   """ print(f"\n[INFO] {T['range_detected']} : {net}")
-    ans = input(f"[?] {T['range_change']} ").strip().lower()
-    if ans == "y":
-        print(FG_YELLOW + T["range_back"] + RESET)
+        print(FG_YELLOW +
+              "[!] Scan cancelled by user | "
+              "الان داری اسکن را لغو می‌کنی"
+              + RESET)
         time.sleep(1)
         return
-"""
-
 
     NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
     START = 1
     END = net.num_addresses - 2
 
-    for w in detect_interface_mode(iface):
-        print(FG_YELLOW + "[WARN] " + w + RESET)
+    # ---- Interface mode detection (real warnings only) ----
+    warnings = detect_interface_mode(iface)
+    for w in warnings:
+        print(FG_YELLOW +
+              f"[WARN] {w['en']} | {w['fa']}"
+              + RESET)
 
+    # ---- Real connection info ----
+    conn_name = get_connection_name(iface)
     my_ip = get_my_ip()
-    my_mac_raw = get_my_mac(iface)
-    my_vendor = get_vendor(my_mac_raw)
+    my_mac = get_my_mac(iface)
+    my_vendor = get_vendor(my_mac)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    print(f"\n[INFO] {T['info_interface']} : {iface}")
-    print(f"[INFO] {T['info_network']} : {net}")
-    print(f"[INFO] {T['info_started']} : {now}\n")
+    print(f"""
+[INFO] Interface        : {iface}
+[INFO] Connection Name  : {conn_name}
+[INFO] Network Range    : {net}
+[INFO] Start Time       : {now}
 
-    print(FG_CYAN + BOLD + "[Local Device]" + RESET)
+[اطلاعات اتصال]
+اینترفیس           : {iface}
+نام اتصال          : {conn_name}
+رنج شبکه           : {net}
+زمان شروع          : {now}
+""")
+
+    print(FG_CYAN + BOLD + "[Local Device | دستگاه فعلی]" + RESET)
     print(f"IP     : {my_ip}")
-    print(f"MAC    : {my_mac_raw}")
+    print(f"MAC    : {my_mac}")
     print(f"Vendor : {my_vendor}\n")
 
-    print(f"[+] {T['scan_start']}")
+    # ---- Scan start ----
+    print("[+] Scan started... | اسکن شروع شد")
 
     ping_ok = {}
+
     for i in range(START, END + 1):
         ip = f"{NETWORK_BASE}{i}"
         r = subprocess.run(
@@ -607,15 +616,18 @@ def perform_scan():
             stderr=subprocess.DEVNULL
         )
         ping_ok[ip] = (r.returncode == 0)
-        percent = int(((i-START+1)/(END-START+1))*100)
-        sys.stdout.write(f"\rScanning {ip}... {percent}%")
+
+        percent = int(((i - START + 1) / (END - START + 1)) * 100)
+        sys.stdout.write(
+            f"\rScanning {ip}... {percent}% | درحال اسکن"
+        )
         sys.stdout.flush()
         time.sleep(BASE_DELAY)
 
-    print(f"\n[+] {T['ping_done']}")
+    print("\n[+] Ping phase done | مرحله پینگ تمام شد")
     time.sleep(ARP_DELAY)
 
-    print(f"\n[+] {T['arp_read']}\n")
+    print("[+] Reading ARP table | خواندن جدول ARP\n")
     arp = read_arp()
 
     active, arp_only, incomplete = [], [], []
@@ -623,6 +635,7 @@ def perform_scan():
     for d in arp:
         if d["ip"] == my_ip:
             continue
+
         if d["mac"] == "<incomplete>":
             incomplete.append(d)
         elif ping_ok.get(d["ip"]):
@@ -630,20 +643,30 @@ def perform_scan():
         else:
             arp_only.append(d)
 
-    for title, data, icon in [
-        (T["active"], active, "✅"),
-        (T["arp_only"], arp_only, "⚠️"),
-        (T["incomplete"], incomplete, "❌")
-    ]:
-        print(f"\n========== {title} ==========")
+    # ---- Output ----
+    def show_block(title_en, title_fa, data, icon):
+        print(f"\n========== {title_en} | {title_fa} ==========")
         for d in data:
             print(f"{icon} {d['ip']}  {d['mac']}  [{d['vendor']}]")
 
+    show_block("Active Devices", "دستگاه‌های فعال", active, "✅")
+    show_block("ARP Only", "فقط در ARP", arp_only, "⚠️")
+    show_block("Incomplete", "ناقص", incomplete, "❌")
+
     total = len(active) + len(arp_only) + len(incomplete)
-    print(f"\n{T['total']}: {total}")
-    print(f"{T['total_self']}: {total + 1}")
-    print(f"[✓] {T['done']}")
-    input(T["press_enter"])
+
+    print(f"""
+Total devices        : {total}
+Total with self      : {total + 1}
+
+تعداد کل دستگاه‌ها      : {total}
+با احتساب خود سیستم     : {total + 1}
+
+[✓] Scan completed successfully
+اسکن با موفقیت انجام شد
+""")
+
+    input("Press Enter to continue | برای ادامه Enter بزن")
 
 # =========================================================
 # ===================== Menu ==============================
