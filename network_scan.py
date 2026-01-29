@@ -116,10 +116,10 @@ TEXT = {
         "enter_new_range": "New network range (CIDR)",
         "invalid_range": "Invalid network range",
         "range_set": "Network range set to",
-        "network_name": "Network name"
+        "network_name": "Network name" ,
         
 
-        "menu_width": 54
+        "menu_width": 54 ,
     },
 
     "fa": {
@@ -179,9 +179,9 @@ TEXT = {
         "enter_new_range": "رنج جدید (CIDR)",
         "invalid_range": "رنج واردشده نامعتبر است",
         "range_set": "رنج شبکه تنظیم شد",
-        "network_name": "نام شبکه"
+        "network_name": "نام شبکه" ,
 
-        "menu_width": 60
+        "menu_width": 60 ,
     }
 }
 
