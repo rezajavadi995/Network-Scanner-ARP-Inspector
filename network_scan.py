@@ -213,6 +213,63 @@ ARP_DELAY = 0.4
 # =========================================================
 # ===================== Helpers ===========================
 # =========================================================
+
+
+
+
+def print_network_overview(ctx, net_range, start_time):
+    """
+    چاپ اطلاعات کامل شبکه، دستگاه و هشدارها
+    """
+    print(FG_CYAN + BOLD + "\n\n==================== NETWORK SCAN INITIATED ====================" + RESET)
+    print(FG_YELLOW + BOLD + "   Reza Javadi - Network Scanner" + RESET)
+    print(FG_CYAN + BOLD + "================================================================\n" + RESET)
+
+    # ---- CONNECTION OVERVIEW ----
+    print(FG_CYAN + BOLD + "==================== CONNECTION OVERVIEW ====================" + RESET)
+    print(f"""
+[INFO] Interface        : {ctx['interface']}
+[INFO] Interface Mode   : {ctx['iface_mode']}
+[INFO] Connection Name  : {ctx['connection_name']}
+""")
+
+    # ---- NETWORK CONTEXT ----
+    print(FG_CYAN + BOLD + "==================== NETWORK CONTEXT ========================" + RESET)
+    print(f"""
+[INFO] Network Range    : {net_range}
+[INFO] Scan Start Time  : {start_time}
+
+[اطلاعات شبکه]
+رنج شبکه           : {net_range}
+زمان شروع          : {start_time}
+""")
+
+    # ---- LOCAL DEVICE ----
+    print(FG_CYAN + BOLD + "==================== LOCAL DEVICE (YOU) =====================" + RESET)
+    print(f"""
+IP Address          : {ctx['ip']}
+MAC Address         : {ctx['mac']}
+Vendor              : {ctx['vendor']}
+""")
+
+    # ---- GATEWAY INFO ----
+    print(FG_CYAN + BOLD + "==================== GATEWAY INFO ===========================" + RESET)
+    print(f"""
+Gateway IP          : {ctx['gateway']}
+Gateway MAC         : {ctx['gateway_mac']}
+""")
+
+    # ---- WARNINGS ----
+    if ctx["warnings"]:
+        print(FG_RED + BOLD + "==================== WARNINGS ===============================" + RESET)
+        for w in ctx["warnings"]:
+            print(FG_RED + f"⚠️  {w}" + RESET)
+        print(FG_RED + "============================================================\n" + RESET)
+
+    print(FG_GREEN + BOLD + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
+    print()
+
+
 def ip_to_int(ip):
     try:
         return struct.unpack("!I", socket.inet_aton(ip))[0]
