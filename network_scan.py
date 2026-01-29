@@ -548,6 +548,54 @@ def get_connection_name(iface):
         pass
     return "Unknown"
 
+#####
+
+
+
+def detect_interface_reality(iface):
+    """
+    تشخیص واقعی نوع اتصال:
+    - NAT / Bridge / Wi-Fi / Ethernet واقعی / مجازی
+    """
+    mode = "Unknown"
+    try:
+        # بررسی وایرلس
+        if os.path.exists(f"/sys/class/net/{iface}/wireless"):
+            mode = "Wi-Fi"
+        else:
+            mode = "Ethernet"
+
+        # بررسی default gateway
+        out = subprocess.check_output(["ip", "route"], text=True)
+        for line in out.splitlines():
+            if line.startswith("default") and iface in line:
+                gw = line.split()[2]
+                # اگه GW داخلی و iface مجازی
+                if "vbox" in iface.lower() or "vm" in iface.lower():
+                    mode = "NAT / Virtual"
+                break
+
+        # بررسی مجازی بودن با MAC OUIs
+        mac = get_my_mac(iface)
+        if mac:
+            mac_prefix = mac.upper().replace(":", "")[:6]
+            virtual_prefixes = [
+                "080027",  # VirtualBox
+                "000569",  # VMware
+                "001C14",  # Hyper-V
+            ]
+            if mac_prefix in virtual_prefixes:
+                mode = "Virtual / NAT"
+
+    except:
+        pass
+    return mode
+
+
+
+####
+
+
 
 # =========================================================
 # ===================== Scan ==============================
