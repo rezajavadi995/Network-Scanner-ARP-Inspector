@@ -347,54 +347,6 @@ def build_network_context():
     }
     return context
 
-
-# ===================== Interface Reality Detection =====================
-def detect_interface_mode(iface):
-    """
-    FA: تشخیص واقعی نوع اتصال (Wi-Fi / NAT / Bridge)
-    EN: Real interface mode detection
-    """
-    warnings = []
-
-    # ---- Wi-Fi detection ----
-    try:
-        if os.path.exists(f"/sys/class/net/{iface}/wireless"):
-            warnings.append(Tget("iface_wifi"))
-    except:
-        pass
-
-    # ---- NAT / Bridge detection ----
-    try:
-        out = subprocess.check_output(["ip", "route"], text=True)
-        if "default via" in out:
-            for line in out.splitlines():
-                if "default via" in line and iface in line:
-                    gw = line.split()[2]
-                    if gw.startswith("10.") or gw.startswith("192.168."):
-                        warnings.append(Tget("iface_gateway"))
-    except:
-        pass
-
-    # ---- Virtualization detection ----
-    try:
-        ethtool = subprocess.check_output(
-            ["ethtool", "-i", iface],
-            stderr=subprocess.DEVNULL,
-            text=True
-        )
-        if "virtual" in ethtool.lower():
-            warnings.append(Tget("iface_nat"))
-            warnings.append(Tget("iface_nat_warn"))
-    except:
-        pass
-
-    return warnings
-
-
-
-
-
-
 # ===================== Interface Reality Detection new v1.2
 
 
@@ -823,9 +775,11 @@ def detect_interface_reality(iface):
 def perform_scan():
     global NETWORK_BASE, START, END
 
-    ctx = collect_base_reality()
-    print_base_reality(ctx)
+    #ctx = collect_base_reality()
+   # print_base_reality(ctx)
     iface = ctx["interface"]
+    my_ip = ctx["ip"]
+    medium = ctx["medium"]
 
     # ---- Range decision (ONLY here) ----
     net = network_range_flow()
@@ -840,10 +794,6 @@ def perform_scan():
     NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
     START = 1
     END = net.num_addresses - 2
-
-    # ---- Interface mode detection (real warnings only) ----
-    iface_mode = detect_interface_reality(iface)
-    print(FG_YELLOW + f"[INFO] Interface mode detected: {iface_mode}" + RESET)
 
     # ---- Real connection info ----
     conn_name = get_connection_name(iface)
@@ -994,4 +944,12 @@ def main_menu():
             print(FG_RED + T["invalid_choice"] + RESET)
             time.sleep(1)
 if __name__ == "__main__":
+    ctx = collect_base_reality()
+    print_base_reality(ctx)
+
+    if ctx["warnings"]:
+        time.sleep(1.5)
+
+    perform_scan(ctx)
+
     main_menu()
