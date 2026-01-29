@@ -8,6 +8,7 @@ import re
 import socket
 import struct
 import shutil
+import signal
 import os
 from datetime import datetime
 import ipaddress
@@ -281,6 +282,7 @@ def run_update():
         # FA: اجرای بروزرسانی با خروجی زنده
         process = subprocess.Popen(
             ["python3", f"{BASE_DIR}/network_scan.py", "--update"],
+            stdin=sys.stdin,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
