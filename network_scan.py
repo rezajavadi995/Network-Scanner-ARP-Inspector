@@ -631,6 +631,7 @@ def detect_interface_reality(iface):
 # =========================================================
 # ===================== Scan ==============================
 # =========================================================
+
 def perform_scan():
     global NETWORK_BASE, START, END
 
@@ -650,37 +651,46 @@ def perform_scan():
     START = 1
     END = net.num_addresses - 2
 
-   # ---- Interface mode detection (real warnings only) ----
+    # ---- Interface mode detection (real warnings only) ----
     iface_mode = detect_interface_reality(iface)
     print(FG_YELLOW + f"[INFO] Interface mode detected: {iface_mode}" + RESET)
 
     # ---- Real connection info ----
     conn_name = get_connection_name(iface)
+    print(FG_CYAN + f"[INFO] Connection Name (SSID / LAN): {conn_name}" + RESET)
+
     my_ip = get_my_ip()
     my_mac = get_my_mac(iface)
     my_vendor = get_vendor(my_mac)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    print(FG_CYAN + BOLD + "\n==================== CONNECTION OVERVIEW ====================" + RESET)
     print(f"""
 [INFO] Interface        : {iface}
+[INFO] Interface Mode   : {iface_mode}
 [INFO] Connection Name  : {conn_name}
-[INFO] Network Range    : {net}
-[INFO] Start Time       : {now}
+""")
 
-[اطلاعات اتصال]
-اینترفیس           : {iface}
-نام اتصال          : {conn_name}
+    print(FG_CYAN + BOLD + "==================== NETWORK CONTEXT ========================" + RESET)
+    print(f"""
+[INFO] Network Range    : {net}
+[INFO] Scan Start Time  : {now}
+
+[اطلاعات شبکه]
 رنج شبکه           : {net}
 زمان شروع          : {now}
 """)
 
-    print(FG_CYAN + BOLD + "[Local Device | دستگاه فعلی]" + RESET)
-    print(f"IP     : {my_ip}")
-    print(f"MAC    : {my_mac}")
-    print(f"Vendor : {my_vendor}\n")
+    print(FG_CYAN + BOLD + "==================== LOCAL DEVICE (YOU) =====================" + RESET)
+    print(f"""
+IP Address          : {my_ip}
+MAC Address         : {my_mac}
+Vendor              : {my_vendor}
+""")
 
-    # ---- Scan start ----
-    print("[+] Scan started... | اسکن شروع شد")
+    print(FG_GREEN + BOLD + "============================================================" + RESET)
+    print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
+    print()
 
     ping_ok = {}
 
@@ -743,6 +753,10 @@ Total with self      : {total + 1}
 """)
 
     input("Press Enter to continue | برای ادامه Enter بزن")
+
+
+
+
 
 # =========================================================
 # ===================== Menu ==============================
