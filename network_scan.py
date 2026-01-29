@@ -392,6 +392,160 @@ def detect_interface_mode(iface):
 
 
 
+
+
+
+# ===================== Interface Reality Detection new v1.2
+
+
+def detect_active_interface():
+    """
+    FA: تشخیص اینترفیس فعال واقعی
+    """
+    try:
+        out = subprocess.check_output(["ip", "route"], text=True)
+        for line in out.splitlines():
+            if line.startswith("default"):
+                return line.split()[line.split().index("dev") + 1]
+    except Exception:
+        pass
+    return None
+
+
+def detect_medium(iface):
+    """
+    FA: تشخیص نوع رسانه اتصال (Wi-Fi یا Ethernet)
+    """
+    if os.path.exists(f"/sys/class/net/{iface}/wireless"):
+        return "Wi-Fi"
+    return "Ethernet"
+
+
+
+def detect_wifi_mode(iface):
+    """
+    FA: تشخیص Managed / Monitor / Unknown
+    """
+    try:
+        out = subprocess.check_output(["iw", "dev"], text=True)
+        block = out.split(f"Interface {iface}")[1]
+        for line in block.splitlines():
+            if "type" in line:
+                return line.split()[-1]
+    except Exception:
+        pass
+    return "Unknown"
+
+
+def detect_gateway():
+    """
+    FA: تشخیص Gateway و MAC آن
+    """
+    gw_ip = None
+    gw_mac = None
+
+    try:
+        out = subprocess.check_output(["ip", "route"], text=True)
+        for line in out.splitlines():
+            if line.startswith("default"):
+                gw_ip = line.split()[2]
+                break
+
+        if gw_ip:
+            arp = subprocess.check_output(["ip", "neigh"], text=True)
+            for l in arp.splitlines():
+                if l.startswith(gw_ip) and "lladdr" in l:
+                    gw_mac = l.split()[l.split().index("lladdr") + 1]
+    except Exception:
+        pass
+
+    return gw_ip, gw_mac
+
+
+def detect_nat_signs(context):
+    """
+    FA: تشخیص نشانه‌های NAT
+    """
+    gw = context["gateway"]
+    ip = context["ip"]
+
+    if not gw or not ip:
+        return
+
+    if gw.startswith("10.") or gw.startswith("192.168.") or gw.startswith("172."):
+        context["nat_suspected"] = True
+        context["warnings"].append("Private gateway detected (possible NAT)")
+
+
+def detect_virtualization(context):
+    """
+    FA: تشخیص محیط مجازی
+    """
+    mac = context["mac"]
+    iface = context["interface"]
+
+    virtual_ouis = {
+        "080027": "VirtualBox",
+        "000569": "VMware",
+        "001C14": "Hyper-V",
+        "525400": "QEMU"
+    }
+
+    if mac:
+        prefix = mac.upper().replace(":", "")[:6]
+        if prefix in virtual_ouis:
+            context["virtual_suspected"] = True
+            context["warnings"].append(
+                f"Virtual NIC detected ({virtual_ouis[prefix]})"
+            )
+
+    if iface and any(x in iface.lower() for x in ["vbox", "vm", "vir", "docker"]):
+        context["virtual_suspected"] = True
+
+
+
+def collect_base_reality():
+    ctx = build_network_context()
+
+    iface = detect_active_interface()
+    ctx["interface"] = iface
+
+    ctx["medium"] = detect_medium(iface)
+    if ctx["medium"] == "Wi-Fi":
+        ctx["iface_mode"] = detect_wifi_mode(iface)
+
+    ctx["connection_name"] = get_connection_name(iface)
+    ctx["ip"] = get_my_ip()
+    ctx["mac"] = get_my_mac(iface)
+    ctx["vendor"] = get_vendor(ctx["mac"])
+
+    gw_ip, gw_mac = detect_gateway()
+    ctx["gateway"] = gw_ip
+    ctx["gateway_mac"] = gw_mac
+
+    detect_nat_signs(ctx)
+    detect_virtualization(ctx)
+
+    return ctx
+
+
+def print_base_reality(ctx):
+    print(FG_CYAN + BOLD + "\n========== NETWORK REALITY CHECK ==========" + RESET)
+
+    for k, v in ctx.items():
+        if k == "warnings":
+            continue
+        print(f"{k:18} : {v}")
+
+    if ctx["warnings"]:
+        print(FG_RED + BOLD + "\n[WARNINGS]" + RESET)
+        for w in ctx["warnings"]:
+            print(FG_RED + f" - {w}" + RESET)
+
+    print(FG_CYAN + "==========================================\n" + RESET)
+
+
+
 # =========================================================
 # ===================== Dynamic Network ===================
 # =========================================================
@@ -669,7 +823,9 @@ def detect_interface_reality(iface):
 def perform_scan():
     global NETWORK_BASE, START, END
 
-    iface = get_interface()
+    ctx = collect_base_reality()
+    print_base_reality(ctx)
+    iface = ctx["interface"]
 
     # ---- Range decision (ONLY here) ----
     net = network_range_flow()
