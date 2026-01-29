@@ -435,7 +435,14 @@ def get_my_mac(iface):
 # =========================================================
 # ===================== ARP ===============================
 # =========================================================
-def read_arp():
+def read_arp_enhanced():
+    """
+    خواندن ARP table و شناسایی دستگاه‌ها
+    - IP واقعی
+    - MAC واقعی
+    - Vendor با OUI
+    - نوع اتصال LAN یا Wi-Fi با حدس
+    """
     entries = []
     try:
         out = subprocess.check_output(["ip", "neigh"], text=True)
@@ -445,12 +452,27 @@ def read_arp():
             mac = "<incomplete>"
             if "lladdr" in parts:
                 mac = parts[parts.index("lladdr") + 1]
+
+            vendor = get_vendor(mac)
+            # حدس نوع اتصال از MAC یا prefix (LAN/Wi-Fi)
+            conn_type = "Unknown"
+            if mac != "<incomplete>":
+                mac_prefix = mac.upper().replace(":", "")[:6]
+                if mac_prefix in ["080027", "000569", "001C14"]:
+                    conn_type = "Virtual / NAT"
+                elif mac_prefix.startswith("AC") or mac_prefix.startswith("B4"):
+                    conn_type = "Wi-Fi"
+                else:
+                    conn_type = "Ethernet"
+
             entries.append({
                 "ip": ip,
                 "mac": mac,
-                "vendor": get_vendor(mac)
+                "vendor": vendor,
+                "connection": conn_type
             })
-    except:
+
+    except Exception:
         pass
     return entries
 
@@ -532,50 +554,59 @@ def network_range_flow():
 
 def get_connection_name(iface):
     """
-    FA: نام واقعی اتصال (SSID یا نام اتصال LAN)
-    EN: Real connection name (SSID or wired connection)
+    FA: نام واقعی اتصال (SSID یا LAN)
+    EN: Real connection name
     """
+    name = "Unknown"
     try:
+        # لینوکس: nmcli برای وایرلس و LAN
         out = subprocess.check_output(
             ["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device"],
             text=True
         )
         for line in out.splitlines():
-            dev, name = line.split(":", 1)
+            dev, conn = line.split(":", 1)
             if dev == iface:
-                return name if name else "Unknown"
-    except:
+                name = conn if conn else "Unknown"
+                break
+    except Exception:
+        # اگر خطایی بود، نام Unknown باقی می‌ماند
         pass
-    return "Unknown"
+    return name
+    
 
 #####
 
 
 
+# ===================== Interface Reality Detection =====================
 def detect_interface_reality(iface):
     """
     تشخیص واقعی نوع اتصال:
     - NAT / Bridge / Wi-Fi / Ethernet واقعی / مجازی
+    - بررسی می‌کند کارت وای‌فای است یا LAN
+    - بررسی می‌کند مجازی است (VirtualBox, VMware, Hyper-V)
+    - بررسی default gateway
     """
     mode = "Unknown"
     try:
-        # بررسی وایرلس
+        # بررسی اینکه آیا کارت وای‌فای است
         if os.path.exists(f"/sys/class/net/{iface}/wireless"):
             mode = "Wi-Fi"
         else:
             mode = "Ethernet"
 
-        # بررسی default gateway
+        # بررسی default gateway برای تشخیص NAT/Bridge
         out = subprocess.check_output(["ip", "route"], text=True)
         for line in out.splitlines():
             if line.startswith("default") and iface in line:
                 gw = line.split()[2]
-                # اگه GW داخلی و iface مجازی
+                # اگر اینترفیس مربوط به ماشین مجازی باشد
                 if "vbox" in iface.lower() or "vm" in iface.lower():
                     mode = "NAT / Virtual"
                 break
 
-        # بررسی مجازی بودن با MAC OUIs
+        # بررسی MAC برای تشخیص کارت مجازی
         mac = get_my_mac(iface)
         if mac:
             mac_prefix = mac.upper().replace(":", "")[:6]
@@ -587,10 +618,10 @@ def detect_interface_reality(iface):
             if mac_prefix in virtual_prefixes:
                 mode = "Virtual / NAT"
 
-    except:
+    except Exception as e:
+        # اگر هر خطایی رخ داد، Unknown باقی می‌ماند
         pass
     return mode
-
 
 
 ####
@@ -619,12 +650,9 @@ def perform_scan():
     START = 1
     END = net.num_addresses - 2
 
-    # ---- Interface mode detection (real warnings only) ----
-    warnings = detect_interface_mode(iface)
-    for w in warnings:
-        print(FG_YELLOW +
-              f"[WARN] {w['en']} | {w['fa']}"
-              + RESET)
+   # ---- Interface mode detection (real warnings only) ----
+    iface_mode = detect_interface_reality(iface)
+    print(FG_YELLOW + f"[INFO] Interface mode detected: {iface_mode}" + RESET)
 
     # ---- Real connection info ----
     conn_name = get_connection_name(iface)
