@@ -314,6 +314,40 @@ def run_update():
         signal.signal(signal.SIGINT, old_sigint)
 
     input("\nPress Enter to return to menu...")
+
+
+
+
+
+#brain 
+
+
+def build_network_context():
+    """
+    FA:
+    جمع‌آوری تمام اطلاعات پایه شبکه و محیط اجرا
+    بدون هیچ اسکن تهاجمی
+
+    EN:
+    Build full base network reality context
+    """
+    context = {
+        "interface": None,
+        "medium": None,          # Wi-Fi / Ethernet
+        "iface_mode": None,      # Managed / Monitor / Unknown
+        "connection_name": None,
+        "ip": None,
+        "mac": None,
+        "vendor": None,
+        "gateway": None,
+        "gateway_mac": None,
+        "nat_suspected": False,
+        "virtual_suspected": False,
+        "warnings": []
+    }
+    return context
+
+
 # ===================== Interface Reality Detection =====================
 def detect_interface_mode(iface):
     """
