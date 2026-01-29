@@ -109,6 +109,16 @@ TEXT = {
         "iface_gateway": "Gateway Detected",
         "iface_arp_limited": "ARP visibility : Limited",
 
+        #new
+        "scan_continue": "Scan will continue with current network",
+        "scan_cancelled": "Scan cancelled by user",
+        "range_edit": "Enter new network range",
+        "enter_new_range": "New network range (CIDR)",
+        "invalid_range": "Invalid network range",
+        "range_set": "Network range set to",
+        "network_name": "Network name"
+        
+
         "menu_width": 54
     },
 
@@ -161,6 +171,15 @@ TEXT = {
         "iface_wifi": "حالت اینترفیس : وای‌فای (Managed)",
         "iface_gateway": "گیت‌وی شناسایی شد",
         "iface_arp_limited": "دسترسی ARP محدود است",
+
+        
+        "scan_continue": "اسکن با رنج فعلی ادامه پیدا می‌کند",
+        "scan_cancelled": "اسکن توسط کاربر لغو شد",
+        "range_edit": "رنج جدید شبکه را وارد کنید",
+        "enter_new_range": "رنج جدید (CIDR)",
+        "invalid_range": "رنج واردشده نامعتبر است",
+        "range_set": "رنج شبکه تنظیم شد",
+        "network_name": "نام شبکه"
 
         "menu_width": 60
     }
@@ -471,29 +490,61 @@ def load_network_range():
 # ===================== Network Range Flow =====================
 def network_range_flow():
     """
-    FA: تشخیص، نمایش، تغییر و ذخیره رنج شبکه
-    EN: Detect, show, change and persist network range
+    FA: تشخیص رنج شبکه و تصمیم نهایی کاربر در همان‌جا
+    EN: Detect network range and let user decide once
     """
-    # FA: اگر قبلاً ذخیره شده، اولویت دارد
-    saved = load_network_range()
-    net = saved if saved else detect_network_range()
+
+    net = detect_network_range()
 
     print(f"\n[INFO] {Tget('range_detected')} : {net}")
 
     ans = input(f"[?] {Tget('range_change')} ").strip().lower()
 
-    if ans == "y":
-        print(FG_YELLOW + Tget("range_back") + RESET)
-        time.sleep(1)
-        return None  # برگشت به منو
+    # کاربر نمی‌خواهد تغییر دهد
+    if ans != "y":
+        print(FG_GREEN + Tget("range_keep") + RESET)
+        print(FG_GRAY + Tget("scan_continue") + RESET)
+        time.sleep(0.5)
+        return net
 
-    # FA: ذخیره رنج تأییدشده
-    save_network_range(net)
-    print(FG_GREEN + Tget("range_keep") + RESET)
-    time.sleep(0.5)
+    # کاربر می‌خواهد تغییر دهد
+    print(FG_YELLOW + Tget("range_edit") + RESET)
+    new_range = input(Tget("enter_new_range") + " ").strip()
 
-    return net
+    try:
+        new_net = ipaddress.ip_network(new_range, strict=False)
+    except ValueError:
+        print(FG_RED + Tget("invalid_range") + RESET)
+        print(FG_RED + Tget("scan_cancelled") + RESET)
+        return None
 
+    print(FG_GREEN + f"{Tget('range_set')} : {new_net}" + RESET)
+    return new_net
+
+
+
+
+
+
+#
+
+def get_connection_name(iface):
+    """
+    FA: نام واقعی اتصال (SSID یا نام اتصال LAN)
+    EN: Real connection name (SSID or wired connection)
+    """
+    try:
+        out = subprocess.check_output(
+            ["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device"],
+            text=True
+        )
+        for line in out.splitlines():
+            dev, name = line.split(":", 1)
+            if dev == iface:
+                return name if name else "Unknown"
+    except:
+        pass
+    return "Unknown"
 
 
 # =========================================================
@@ -513,12 +564,14 @@ def perform_scan():
 
     if net is None:
         return
-    print(f"\n[INFO] {T['range_detected']} : {net}")
+   """ print(f"\n[INFO] {T['range_detected']} : {net}")
     ans = input(f"[?] {T['range_change']} ").strip().lower()
     if ans == "y":
         print(FG_YELLOW + T["range_back"] + RESET)
         time.sleep(1)
         return
+"""
+
 
     NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
     START = 1
