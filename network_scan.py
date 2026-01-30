@@ -1047,6 +1047,16 @@ Total with self      : {total + 1}
 
 
 
+# ---- Stage 2: Topology Analysis ----
+    enriched_devices = []
+
+    for d in active + arp_only:
+        enriched = enrich_device(d, ctx)
+        enriched_devices.append(enriched)
+
+    topology = build_topology(enriched_devices, ctx)
+    print_topology(topology)
+
 
 
 
