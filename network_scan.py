@@ -555,6 +555,135 @@ def print_base_reality(ctx):
 
 
 
+
+
+
+#step2
+def enrich_device(device, ctx):
+    """
+    FA:
+    تحلیل یک دستگاه بر اساس ARP / Vendor / Gateway
+    بدون اسکن اضافه
+
+    EN:
+    Enrich device with topology hints
+    """
+    enriched = device.copy()
+
+    enriched["role"] = "unknown"      # gateway / ap / device
+    enriched["behind"] = None         # parent device
+    enriched["suspected_nat"] = False
+    enriched["suspected_virtual"] = False
+    enriched["notes"] = []
+
+    mac = device["mac"].lower()
+    vendor = device["vendor"].lower()
+
+    # ---- Gateway detection ----
+    if device["ip"] == ctx["gateway"]:
+        enriched["role"] = "gateway"
+        enriched["notes"].append("Default Gateway")
+
+    # ---- AP / Router suspicion ----
+    router_keywords = [
+        "router", "wireless", "mikrotik", "ubiquiti",
+        "tp-link", "d-link", "asus", "netgear", "huawei"
+    ]
+
+    if any(k in vendor for k in router_keywords):
+        if enriched["role"] != "gateway":
+            enriched["role"] = "ap"
+            enriched["notes"].append("Vendor suggests AP/Router")
+
+    # ---- Virtual suspicion ----
+    virtual_vendors = [
+        "vmware", "virtualbox", "qemu", "parallels", "hyper-v"
+    ]
+
+    if any(v in vendor for v in virtual_vendors):
+        enriched["suspected_virtual"] = True
+        enriched["notes"].append("Virtual NIC detected")
+
+    # ---- NAT suspicion ----
+    if ctx["medium"] == "Wi-Fi" and enriched["role"] == "device":
+        enriched["suspected_nat"] = True
+        enriched["notes"].append("Possible NAT behind Wi-Fi")
+
+    return enriched
+
+#build topology
+
+
+def build_topology(devices, ctx):
+    """
+    FA:
+    ساخت توپولوژی حدسی شبکه
+
+    EN:
+    Build guessed network topology
+    """
+    topology = {
+        "gateway": None,
+        "aps": [],
+        "devices": []
+    }
+
+    for d in devices:
+        if d["role"] == "gateway":
+            topology["gateway"] = d
+        elif d["role"] == "ap":
+            topology["aps"].append(d)
+        else:
+            topology["devices"].append(d)
+
+    # ---- Assign parent (behind) ----
+    for d in topology["devices"]:
+        if topology["aps"]:
+            d["behind"] = topology["aps"][0]["ip"]
+            d["notes"].append("Behind AP")
+        elif topology["gateway"]:
+            d["behind"] = topology["gateway"]["ip"]
+            d["notes"].append("Direct to Gateway")
+
+    return topology
+
+
+
+def print_topology(topology):
+    print(FG_CYAN + BOLD + "\n==================== NETWORK TOPOLOGY (GUESS) ====================" + RESET)
+
+    gw = topology["gateway"]
+    if gw:
+        print(FG_GREEN + f"⚛ Gateway: {gw['ip']}  {gw['vendor']}" + RESET)
+
+    for ap in topology["aps"]:
+        print(FG_BLUE + f"➿ AP: {ap['ip']}  {ap['vendor']}" + RESET)
+
+        for note in ap["notes"]:
+            print(FG_BLUE + f"   └─ {note}" + RESET)
+
+    for d in topology["devices"]:
+        color = FG_GREEN
+        icon = "✳️"
+
+        if d["suspected_virtual"]:
+            color = FG_RED
+            icon = "♨️"
+
+        elif d["suspected_nat"]:
+            color = FG_YELLOW
+            icon = "✴️"
+
+        print(color + f"{icon} Device: {d['ip']}  {d['vendor']}" + RESET)
+
+        if d["behind"]:
+            print(color + f"   └─ Behind: {d['behind']}" + RESET)
+
+        for note in d["notes"]:
+            print(color + f"   └─ {note}" + RESET)
+
+    print(FG_CYAN + "==================================================================\n" + RESET)
+
 # =========================================================
 # ===================== Dynamic Network ===================
 # =========================================================
@@ -877,6 +1006,8 @@ def perform_scan(ctx):
     arp = read_arp()
 
     active, arp_only, incomplete = [], [], []
+
+    
 
     for d in arp:
         if d["ip"] == my_ip:
