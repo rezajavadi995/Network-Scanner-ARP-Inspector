@@ -824,27 +824,19 @@ def detect_interface_reality(iface):
 ####
 
 
-
 # =========================================================
-# ===================== Scan ==============================
+# ===================== Scan =============================
 # =========================================================
-
-def perform_scan():
+def perform_scan(ctx):
     global NETWORK_BASE, START, END
 
-    #ctx = collect_base_reality()
-   # print_base_reality(ctx)
     iface = ctx["interface"]
     my_ip = ctx["ip"]
-    medium = ctx["medium"]
 
-    # ---- Range decision (ONLY here) ----
+    # ---- Range decision (dynamic) ----
     net = network_range_flow()
     if net is None:
-        print(FG_YELLOW +
-              "[!] Scan cancelled by user | "
-              "الان داری اسکن را لغو می‌کنی"
-              + RESET)
+        print(FG_YELLOW + "[!] Scan cancelled by user | الان داری اسکن را لغو می‌کنی" + RESET)
         time.sleep(1)
         return
 
@@ -852,42 +844,13 @@ def perform_scan():
     START = 1
     END = net.num_addresses - 2
 
-    # ---- Real connection info ----
-    conn_name = get_connection_name(iface)
-    print(FG_CYAN + f"[INFO] Connection Name (SSID / LAN): {conn_name}" + RESET)
-
-    my_ip = get_my_ip()
-    my_mac = get_my_mac(iface)
-    my_vendor = get_vendor(my_mac)
+    conn_name = ctx["connection_name"]
+    my_mac = ctx["mac"]
+    my_vendor = ctx["vendor"]
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    print(FG_CYAN + BOLD + "\n==================== CONNECTION OVERVIEW ====================" + RESET)
-    print(f"""
-[INFO] Interface        : {iface}
-[INFO] Interface Mode   : {iface_mode}
-[INFO] Connection Name  : {conn_name}
-""")
-
-    print(FG_CYAN + BOLD + "==================== NETWORK CONTEXT ========================" + RESET)
-    print(f"""
-[INFO] Network Range    : {net}
-[INFO] Scan Start Time  : {now}
-
-[اطلاعات شبکه]
-رنج شبکه           : {net}
-زمان شروع          : {now}
-""")
-
-    print(FG_CYAN + BOLD + "==================== LOCAL DEVICE (YOU) =====================" + RESET)
-    print(f"""
-IP Address          : {my_ip}
-MAC Address         : {my_mac}
-Vendor              : {my_vendor}
-""")
-
-    print(FG_GREEN + BOLD + "============================================================" + RESET)
-    print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
-    print()
+    # ---- چاپ کامل و جذاب ----
+    print_network_overview(ctx, net_range=net, start_time=now)
 
     ping_ok = {}
 
@@ -950,6 +913,7 @@ Total with self      : {total + 1}
 """)
 
     input("Press Enter to continue | برای ادامه Enter بزن")
+
 
 
 
