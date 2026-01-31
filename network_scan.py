@@ -576,11 +576,11 @@ def enrich_device(device, ctx):
     enriched["suspected_virtual"] = False
     enriched["notes"] = []
 
-    mac = device["mac"].lower()
-    vendor = device["vendor"].lower()
+    mac = device.get("mac", "").lower()
+    vendor = device.get("vendor", "").lower()
 
     # ---- Gateway detection ----
-    if device["ip"] == ctx["gateway"]:
+    if device.get("ip") == ctx.get("gateway"):
         enriched["role"] = "gateway"
         enriched["notes"].append("Default Gateway")
 
@@ -605,7 +605,7 @@ def enrich_device(device, ctx):
         enriched["notes"].append("Virtual NIC detected")
 
     # ---- NAT suspicion ----
-    if ctx["medium"] == "Wi-Fi" and enriched["role"] == "device":
+    if ctx.get("medium") == "Wi-Fi" and enriched["role"] == "device":
         enriched["suspected_nat"] = True
         enriched["notes"].append("Possible NAT behind Wi-Fi")
 
@@ -649,41 +649,45 @@ def build_topology(devices, ctx):
 
 
 
+
+
+#
+
+
 def print_topology(topology):
     print(FG_CYAN + BOLD + "\n==================== NETWORK TOPOLOGY (GUESS) ====================" + RESET)
 
-    gw = topology["gateway"]
+    gw = topology.get("gateway")
     if gw:
-        print(FG_GREEN + f"⚛ Gateway: {gw['ip']}  {gw['vendor']}" + RESET)
+        print(FG_GREEN + f"⚛ Gateway: {gw['ip']}  {gw.get('vendor','')}" + RESET)
+        for note in gw.get("notes", []):
+            print(FG_GREEN + f"   └─ {note}" + RESET)
 
-    for ap in topology["aps"]:
-        print(FG_BLUE + f"➿ AP: {ap['ip']}  {ap['vendor']}" + RESET)
-
-        for note in ap["notes"]:
+    for ap in topology.get("aps", []):
+        print(FG_BLUE + f"➿ AP: {ap['ip']}  {ap.get('vendor','')}" + RESET)
+        for note in ap.get("notes", []):
             print(FG_BLUE + f"   └─ {note}" + RESET)
 
-    for d in topology["devices"]:
+    for d in topology.get("devices", []):
         color = FG_GREEN
         icon = "✳️"
 
-        if d["suspected_virtual"]:
+        if d.get("suspected_virtual"):
             color = FG_RED
             icon = "♨️"
-
-        elif d["suspected_nat"]:
+        elif d.get("suspected_nat"):
             color = FG_YELLOW
             icon = "✴️"
 
-        print(color + f"{icon} Device: {d['ip']}  {d['vendor']}" + RESET)
+        print(color + f"{icon} Device: {d['ip']}  {d.get('vendor','')}" + RESET)
 
-        if d["behind"]:
+        if d.get("behind"):
             print(color + f"   └─ Behind: {d['behind']}" + RESET)
 
-        for note in d["notes"]:
+        for note in d.get("notes", []):
             print(color + f"   └─ {note}" + RESET)
 
     print(FG_CYAN + "==================================================================\n" + RESET)
-
 # =========================================================
 # ===================== Dynamic Network ===================
 # =========================================================
