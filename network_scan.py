@@ -1235,16 +1235,14 @@ def perform_scan(ctx):
     START = 1
     END = net.num_addresses - 2
 
-    conn_name = ctx["connection_name"]
-    my_mac = ctx["mac"]
-    my_vendor = ctx["vendor"]
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # ---- چاپ کامل و جذاب ----
+    # ---- Overview ----
     print_network_overview(ctx, net_range=net, start_time=now)
 
     ping_ok = {}
 
+    # ===================== Stage 1: Ping Sweep =====================
     for i in range(START, END + 1):
         ip = f"{NETWORK_BASE}{i}"
         r = subprocess.run(
@@ -1255,15 +1253,14 @@ def perform_scan(ctx):
         ping_ok[ip] = (r.returncode == 0)
 
         percent = int(((i - START + 1) / (END - START + 1)) * 100)
-        sys.stdout.write(
-            f"\rScanning {ip}... {percent}% | درحال اسکن"
-        )
+        sys.stdout.write(f"\rScanning {ip}... {percent}% | درحال اسکن")
         sys.stdout.flush()
         time.sleep(BASE_DELAY)
 
     print("\n[+] Ping phase done | مرحله پینگ تمام شد")
     time.sleep(ARP_DELAY)
 
+    # ===================== Stage 1.5: ARP =====================
     print("[+] Reading ARP table | خواندن جدول ARP\n")
     arp = read_arp()
 
@@ -1303,23 +1300,34 @@ Total with self      : {total + 1}
 اسکن با موفقیت انجام شد
 """)
 
-    input("Press Enter to continue | برای ادامه Enter بزن")
-
-    # ---- Stage 2: Topology Analysis ----
+    # ===================== Stage 2: Topology =====================
     enriched_devices = []
 
     for d in active + arp_only:
-        enriched = enrich_device(d, ctx)
-        enriched_devices.append(enriched)
+        enriched_devices.append(enrich_device(d, ctx))
 
     topology = build_topology(enriched_devices, ctx)
     print_topology(topology)
 
-    # ---- Stage 3: Advanced Topology Analysis ----
+    # ===================== Stage 3: Logical Anomalies =====================
     multi_net_alerts = detect_multiple_networks_behind_ap(topology)
     wifi_nat_alerts = detect_wifi_behind_wifi(topology, ctx)
 
+   ttl_alerts = detect_hidden_hops_by_ttl(topology)
+
     print_stage3_alerts(multi_net_alerts, wifi_nat_alerts)
+
+    # ===================== Stage 4: Mesh / Hidden Networks =====================
+    mesh_alerts = detect_mesh_or_hidden_subnets(topology)
+
+    print_stage4_alerts(
+        multi_net_alerts,
+        wifi_nat_alerts,
+        ttl_alerts,
+        mesh_alerts
+    )
+
+    input("\nPress Enter to continue | برای ادامه Enter بزن")
 # =========================================================
 # ===================== Menu ==============================
 # =========================================================
