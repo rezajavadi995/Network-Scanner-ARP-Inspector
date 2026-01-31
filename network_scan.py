@@ -688,6 +688,102 @@ def print_topology(topology):
             print(color + f"   └─ {note}" + RESET)
 
     print(FG_CYAN + "==================================================================\n" + RESET)
+
+
+
+#ap spet3
+def detect_multiple_networks_behind_ap(topology):
+    """
+    FA:
+    تشخیص وجود چند Subnet پشت یک AP
+
+    EN:
+    Detect multiple networks behind an AP
+    """
+    alerts = []
+
+    for ap in topology.get("aps", []):
+        subnets = set()
+
+        for d in topology.get("devices", []):
+            if d.get("behind") == ap["ip"]:
+                ip = d.get("ip")
+                if ip:
+                    subnet = ".".join(ip.split(".")[:3])
+                    subnets.add(subnet)
+
+        if len(subnets) > 1:
+            ap["notes"].append("Multiple subnets detected behind this AP")
+            ap["multiple_networks"] = True
+            alerts.append({
+                "type": "MULTI_SUBNET",
+                "ap": ap["ip"],
+                "subnets": list(subnets)
+            })
+        else:
+            ap["multiple_networks"] = False
+
+    return alerts
+
+
+#3.2
+def detect_wifi_behind_wifi(topology, ctx):
+    """
+    FA:
+    تشخیص Wi-Fi پشت Wi-Fi (Double NAT / Repeater)
+
+    EN:
+    Detect Wi-Fi behind Wi-Fi / Double NAT
+    """
+    alerts = []
+
+    if ctx.get("medium") != "Wi-Fi":
+        return alerts
+
+    for ap in topology.get("aps", []):
+        if ap.get("suspected_nat"):
+            ap["notes"].append("AP behind Wi-Fi (Possible Repeater / Double NAT)")
+            ap["double_nat"] = True
+
+            alerts.append({
+                "type": "DOUBLE_NAT_WIFI",
+                "ap": ap["ip"],
+                "reason": "AP is behind Wi-Fi and uses private gateway"
+            })
+        else:
+            ap["double_nat"] = False
+
+    return alerts
+
+#3.3
+def print_stage3_alerts(multi_net_alerts, wifi_nat_alerts):
+    print(FG_RED + BOLD + "\n==================== TOPOLOGY WARNINGS ====================" + RESET)
+
+    if not multi_net_alerts and not wifi_nat_alerts:
+        print(FG_GREEN + "✔ No critical topology anomalies detected" + RESET)
+        return
+
+    for a in multi_net_alerts:
+        print(
+            FG_YELLOW +
+            f"⚠️  Multiple networks behind AP {a['ap']} -> {', '.join(a['subnets'])}"
+            + RESET
+        )
+
+    for a in wifi_nat_alerts:
+        print(
+            FG_RED +
+            f"🔥 Wi-Fi behind Wi-Fi detected at AP {a['ap']} ({a['reason']})"
+            + RESET
+        )
+
+    print(FG_RED + "===========================================================\n" + RESET)
+
+#
+
+
+
+
 # =========================================================
 # ===================== Dynamic Network ===================
 # =========================================================
@@ -955,8 +1051,6 @@ def detect_interface_reality(iface):
 
 
 ####
-
-
 # =========================================================
 # ===================== Scan =============================
 # =========================================================
@@ -1011,8 +1105,6 @@ def perform_scan(ctx):
 
     active, arp_only, incomplete = [], [], []
 
-    
-
     for d in arp:
         if d["ip"] == my_ip:
             continue
@@ -1049,9 +1141,7 @@ Total with self      : {total + 1}
 
     input("Press Enter to continue | برای ادامه Enter بزن")
 
-
-
-# ---- Stage 2: Topology Analysis ----
+    # ---- Stage 2: Topology Analysis ----
     enriched_devices = []
 
     for d in active + arp_only:
@@ -1061,9 +1151,11 @@ Total with self      : {total + 1}
     topology = build_topology(enriched_devices, ctx)
     print_topology(topology)
 
+    # ---- Stage 3: Advanced Topology Analysis ----
+    multi_net_alerts = detect_multiple_networks_behind_ap(topology)
+    wifi_nat_alerts = detect_wifi_behind_wifi(topology, ctx)
 
-
-
+    print_stage3_alerts(multi_net_alerts, wifi_nat_alerts)
 # =========================================================
 # ===================== Menu ==============================
 # =========================================================
