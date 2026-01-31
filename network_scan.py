@@ -419,7 +419,7 @@ def detect_active_interface():
     except Exception:
         pass
     return None
-
+#rezajavadi995
 
 def detect_medium(iface):
     """
@@ -554,6 +554,87 @@ def print_base_reality(ctx):
     print(FG_CYAN + "==========================================\n" + RESET)
 
 
+#------------helper2--------------------
+
+
+def extract_ttl_from_ping(ip):
+    """
+    FA:
+    استخراج TTL از پاسخ ping بدون ارسال پکت اضافی
+
+    EN:
+    Extract TTL value from ping response
+    """
+    try:
+        p = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", ip],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True
+        )
+        for line in p.stdout.splitlines():
+            if "ttl=" in line.lower():
+                ttl = line.lower().split("ttl=")[1].split()[0]
+                return int(ttl)
+    except:
+        pass
+    return None
+
+#..
+def detect_hidden_hops_by_ttl(topology):
+    """
+    FA:
+    تشخیص NAT یا Router پنهان با تحلیل TTL
+
+    EN:
+    Detect hidden hops using TTL clustering
+    """
+    alerts = []
+
+    for ap in topology.get("aps", []):
+        ttl_map = {}
+
+        for d in topology.get("devices", []):
+            if d.get("behind") == ap["ip"]:
+                ttl = d.get("ttl")
+                if ttl:
+                    ttl_map.setdefault(ttl, 0)
+                    ttl_map[ttl] += 1
+
+        if len(ttl_map) >= 2:
+            ap["notes"].append("Multiple TTL clusters detected")
+            ap["hidden_hops"] = True
+
+            alerts.append({
+                "type": "TTL_CLUSTER",
+                "ap": ap["ip"],
+                "ttls": ttl_map
+            })
+        else:
+            ap["hidden_hops"] = False
+
+    return alerts
+
+
+def calculate_arp_density(topology):
+    """
+    FA:
+    محاسبه تراکم ARP پشت هر AP
+
+    EN:
+    Calculate ARP density per AP
+    """
+    density = {}
+
+    for ap in topology.get("aps", []):
+        mac_set = set()
+        for d in topology.get("devices", []):
+            if d.get("behind") == ap["ip"]:
+                mac_set.add(d.get("mac"))
+        density[ap["ip"]] = len(mac_set)
+
+    return density
+
 
 
 
@@ -568,6 +649,9 @@ def enrich_device(device, ctx):
     EN:
     Enrich device with topology hints
     """
+    ttl = extract_ttl_from_ping(device["ip"])
+    enriched["ttl"] = ttl
+    
     enriched = device.copy()
 
     enriched["role"] = "unknown"      # gateway / ap / device
@@ -692,6 +776,10 @@ def print_topology(topology):
 
 
 #ap spet3
+
+
+
+
 def detect_multiple_networks_behind_ap(topology):
     """
     FA:
@@ -725,6 +813,7 @@ def detect_multiple_networks_behind_ap(topology):
 
     return alerts
 
+#amu_reza
 
 #3.2
 def detect_wifi_behind_wifi(topology, ctx):
@@ -756,10 +845,11 @@ def detect_wifi_behind_wifi(topology, ctx):
     return alerts
 
 #3.3
-def print_stage3_alerts(multi_net_alerts, wifi_nat_alerts):
+
+def print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts):
     print(FG_RED + BOLD + "\n==================== TOPOLOGY WARNINGS ====================" + RESET)
 
-    if not multi_net_alerts and not wifi_nat_alerts:
+    if not multi_net_alerts and not wifi_nat_alerts and not ttl_alerts:
         print(FG_GREEN + "✔ No critical topology anomalies detected" + RESET)
         return
 
@@ -777,10 +867,84 @@ def print_stage3_alerts(multi_net_alerts, wifi_nat_alerts):
             + RESET
         )
 
+    for a in ttl_alerts:
+        print(
+            FG_RED +
+            f"🧬 Hidden hops behind AP {a['ap']} | TTL clusters: {a['ttls']}"
+            + RESET
+        )
+
     print(FG_RED + "===========================================================\n" + RESET)
 
-#
 
+#step4--------- ARP density + Vendor clustering برای تشخیص Mesh و Load‑balancer
+
+def cluster_vendors(topology):
+    """
+    FA:
+    خوشه‌بندی دستگاه‌ها بر اساس Vendor پشت هر AP
+
+    EN:
+    Cluster devices by vendor per AP
+    """
+    clusters = {}
+
+    for ap in topology.get("aps", []):
+        vendors = {}
+        for d in topology.get("devices", []):
+            if d.get("behind") == ap["ip"]:
+                vendor = d.get("vendor", "Unknown")
+                vendors.setdefault(vendor, 0)
+                vendors[vendor] += 1
+        clusters[ap["ip"]] = vendors
+
+    return clusters
+
+def detect_mesh_or_hidden_subnets(topology):
+    """
+    FA:
+    تشخیص Mesh یا شبکه‌های پنهان با ARP density و Vendor clustering
+
+    EN:
+    Detect Mesh or hidden subnets using ARP density and Vendor clustering
+    """
+    alerts = []
+
+    arp_density = calculate_arp_density(topology)
+    vendor_clusters = cluster_vendors(topology)
+
+    for ap in topology.get("aps", []):
+        dens = arp_density.get(ap["ip"], 0)
+        vclusters = vendor_clusters.get(ap["ip"], {})
+
+        # قانون ساده: density بالاتر از 5 و vendor متنوع → هشدار
+        if dens > 5 and len(vclusters) > 1:
+            ap["notes"].append("High ARP density & multiple vendors detected (possible Mesh / hidden subnet)")
+            ap["mesh_suspected"] = True
+            alerts.append({
+                "type": "MESH_HIDDEN",
+                "ap": ap["ip"],
+                "arp_density": dens,
+                "vendor_clusters": vclusters
+            })
+        else:
+            ap["mesh_suspected"] = False
+
+    return alerts
+
+
+def print_stage4_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts, mesh_alerts):
+    print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts)
+
+    if not mesh_alerts:
+        return
+
+    for a in mesh_alerts:
+        print(
+            FG_MAGENTA +
+            f"🌐 Mesh/Hidden subnet suspected at AP {a['ap']} | ARP density: {a['arp_density']} | Vendors: {list(a['vendor_clusters'].keys())}"
+            + RESET
+        )
 
 
 
