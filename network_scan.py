@@ -24,6 +24,7 @@ FG_YELLOW= "\033[93m"
 FG_RED   = "\033[91m"
 FG_CYAN  = "\033[96m"
 FG_GRAY  = "\033[90m"
+FG_MAGENTA = "\033[95m"
 
 # =========================================================
 # ===================== Paths =============================
@@ -640,35 +641,31 @@ def calculate_arp_density(topology):
 
 
 #step2
+# اصلاح تابع enrich_device
 def enrich_device(device, ctx):
     """
-    FA:
     تحلیل یک دستگاه بر اساس ARP / Vendor / Gateway
-    بدون اسکن اضافه
-
-    EN:
-    Enrich device with topology hints
     """
-    ttl = extract_ttl_from_ping(device["ip"])
-    enriched["ttl"] = ttl
-    
     enriched = device.copy()
+
+    ttl = extract_ttl_from_ping(device.get("ip"))
+    enriched["ttl"] = ttl
 
     enriched["role"] = "unknown"      # gateway / ap / device
     enriched["behind"] = None         # parent device
     enriched["suspected_nat"] = False
     enriched["suspected_virtual"] = False
-    enriched["notes"] = []
+    enriched["notes"] = enriched.get("notes", [])
 
-    mac = device.get("mac", "").lower()
-    vendor = device.get("vendor", "").lower()
+    mac = (device.get("mac") or "").lower()
+    vendor = (device.get("vendor") or "").lower()
 
-    # ---- Gateway detection ----
+    # Gateway detection
     if device.get("ip") == ctx.get("gateway"):
         enriched["role"] = "gateway"
         enriched["notes"].append("Default Gateway")
 
-    # ---- AP / Router suspicion ----
+    # AP / Router suspicion
     router_keywords = [
         "router", "wireless", "mikrotik", "ubiquiti",
         "tp-link", "d-link", "asus", "netgear", "huawei"
@@ -679,7 +676,7 @@ def enrich_device(device, ctx):
             enriched["role"] = "ap"
             enriched["notes"].append("Vendor suggests AP/Router")
 
-    # ---- Virtual suspicion ----
+    # Virtual suspicion
     virtual_vendors = [
         "vmware", "virtualbox", "qemu", "parallels", "hyper-v"
     ]
@@ -688,7 +685,7 @@ def enrich_device(device, ctx):
         enriched["suspected_virtual"] = True
         enriched["notes"].append("Virtual NIC detected")
 
-    # ---- NAT suspicion ----
+    # NAT suspicion (heuristic)
     if ctx.get("medium") == "Wi-Fi" and enriched["role"] == "device":
         enriched["suspected_nat"] = True
         enriched["notes"].append("Possible NAT behind Wi-Fi")
@@ -1262,7 +1259,7 @@ def perform_scan(ctx):
 
     # ===================== Stage 1.5: ARP =====================
     print("[+] Reading ARP table | خواندن جدول ARP\n")
-    arp = read_arp()
+    arp = read_arp_enhanced()
 
     active, arp_only, incomplete = [], [], []
 
@@ -1313,9 +1310,9 @@ Total with self      : {total + 1}
     multi_net_alerts = detect_multiple_networks_behind_ap(topology)
     wifi_nat_alerts = detect_wifi_behind_wifi(topology, ctx)
 
-   ttl_alerts = detect_hidden_hops_by_ttl(topology)
+    ttl_alerts = detect_hidden_hops_by_ttl(topology)
 
-    print_stage3_alerts(multi_net_alerts, wifi_nat_alerts)
+    print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts)
 
     # ===================== Stage 4: Mesh / Hidden Networks =====================
     mesh_alerts = detect_mesh_or_hidden_subnets(topology)
@@ -1358,7 +1355,7 @@ def main_menu():
             continue
 
         if choice == "1":
-            perform_scan()  # FA: اجرای اسکن شبکه / EN: run network scan
+            perform_scan(ctx)  # FA: اجرای اسکن شبکه / EN: run network scan
         elif choice == "2":
             run_update()  # FA: اجرای آپدیت / EN: run update safely
         elif choice == "3":
@@ -1376,6 +1373,7 @@ def main_menu():
 if __name__ == "__main__":
     ctx = collect_base_reality()
     print_base_reality(ctx)
+    main_menu(ctx)
 
     if ctx["warnings"]:
         time.sleep(1.5)
