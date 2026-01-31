@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+trap 'echo; echo "[!] Installation interrupted"; exit 1' INT
 
 # =========================================================
 # Config
@@ -11,35 +12,41 @@ OUI_DB_FILE="$INSTALL_DIR/oui.db"
 TMP_DIR="/tmp/netscan-oui"
 
 # =========================================================
-# Welcome / Language Selection
+# Welcome
 # =========================================================
+clear
 echo "======================================="
 echo "  Network Scanner & ARP Inspector"
-echo "  Auto Installer + OUI Database"
+echo "  Smart Installer"
 echo "  Author: Reza Javadi"
 echo "======================================="
 echo
 
+# =========================================================
+# Language Selection
+# =========================================================
 echo "Select language / انتخاب زبان:"
 echo "1) English"
 echo "2) فارسی"
 read -p "> " LANG_CHOICE
 
-if [[ "$LANG_CHOICE" == "2" ]]; then
-  LANG="fa"
-else
-  LANG="en"
-fi
+[[ "$LANG_CHOICE" == "2" ]] && LANG="fa" || LANG="en"
 
 msg() {
   case "$LANG:$1" in
     fa:checking) echo "[+] بررسی پیش‌نیازها..." ;;
     fa:downloading) echo "[+] دانلود اسکریپت اصلی..." ;;
-    fa:building) echo "[+] ساخت دیتابیس بزرگ OUI..." ;;
+    fa:dbmode) echo "[+] انتخاب حالت دیتابیس OUI" ;;
+    fa:online) echo "[+] استفاده از دیتابیس آنلاین (به‌روز)" ;;
+    fa:offline_warn) echo "[!] هشدار: دیتابیس آفلاین ممکن است قدیمی باشد" ;;
+    fa:building) echo "[+] ساخت دیتابیس آفلاین OUI (ممکن است کمی زمان ببرد)..." ;;
     fa:done) echo "[✓] نصب با موفقیت انجام شد" ;;
     en:checking) echo "[+] Checking system dependencies..." ;;
     en:downloading) echo "[+] Downloading main scanner script..." ;;
-    en:building) echo "[+] Building large OUI database..." ;;
+    en:dbmode) echo "[+] Select OUI database mode" ;;
+    en:online) echo "[+] Using online OUI database (always up-to-date)" ;;
+    en:offline_warn) echo "[!] Warning: Offline database may be outdated" ;;
+    en:building) echo "[+] Building offline OUI database (this may take a while)..." ;;
     en:done) echo "[✓] Installation completed successfully" ;;
   esac
 }
@@ -57,14 +64,25 @@ sudo apt update
 
 DEPENDENCIES=(python3 curl iproute2 iputils-ping gawk coreutils)
 for pkg in "${DEPENDENCIES[@]}"; do
-  printf "[*] Checking %-15s ... " "$pkg"
+  printf "[*] %-18s : " "$pkg"
   if ! command -v "$pkg" >/dev/null 2>&1 && ! dpkg -s "$pkg" >/dev/null 2>&1; then
-    echo "Installing..."
+    echo "Installing"
     sudo apt install -y "$pkg"
   else
     echo "OK"
   fi
 done
+
+# =========================================================
+# OUI Mode Selection
+# =========================================================
+echo
+msg dbmode
+echo "1) Online  (Recommended)"
+echo "2) Offline (Local database)"
+read -p "> " OUI_CHOICE
+
+[[ "$OUI_CHOICE" == "2" ]] && OUI_MODE="offline" || OUI_MODE="online"
 
 # =========================================================
 # Install Directory
@@ -82,51 +100,52 @@ https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/ma
 -o network_scan.py
 chmod +x network_scan.py
 
-# Save language configuration
-echo "NETSCAN_LANG=$LANG" > "$CONF_FILE"
+# =========================================================
+# OUI Handling
+# =========================================================
+if [[ "$OUI_MODE" == "online" ]]; then
+  msg online
+  echo "OUI_MODE=online" > "$CONF_FILE"
+else
+  msg offline_warn
+  read -p "Continue? (y/N): " confirm
+  [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
+
+  msg building
+  mkdir -p "$TMP_DIR"
+  RAW_FILE="$TMP_DIR/oui_raw.txt"
+
+  curl -# -fsSL \
+  https://standards-oui.ieee.org/oui/oui.txt \
+  -o "$RAW_FILE"
+
+  gawk '
+  {
+    gsub(/[:-]/,"",$1)
+    if ($1 ~ /^[0-9A-Fa-f]{6}$/) {
+      vendor=""
+      for (i=2;i<=NF;i++) vendor=vendor $i " "
+      sub(/[ \t]+$/,"",vendor)
+      print toupper($1) "|" vendor
+    }
+  }
+  ' "$RAW_FILE" | sort -u > "$OUI_DB_FILE"
+
+  rm -rf "$TMP_DIR"
+  echo "OUI_MODE=offline" > "$CONF_FILE"
+fi
+
 chmod 600 "$CONF_FILE"
 
 # Symlink
 sudo ln -sf "$INSTALL_DIR/network_scan.py" "$BIN_PATH"
 
 # =========================================================
-# Build OUI Database
-# =========================================================
-msg building
-mkdir -p "$TMP_DIR"
-RAW_FILE="$TMP_DIR/oui_raw.txt"
-
-curl -# -fsSL \
-https://standards-oui.ieee.org/oui/oui.txt \
--o "$RAW_FILE"
-
-if [[ ! -s "$RAW_FILE" ]]; then
-  echo "[!] Failed to download OUI database"
-  exit 1
-fi
-
-# Process OUI with gawk, handle all common formats
-gawk '
-{
-  gsub(/[:-]/,"",$1)
-  if ($1 ~ /^[0-9A-Fa-f]{6}$/) {
-    vendor=""
-    for (i=2;i<=NF;i++) vendor=vendor $i " "
-    sub(/[ \t]+$/,"",vendor)
-    print toupper($1) "|" vendor
-  }
-}
-' "$RAW_FILE" | sort -u > "$OUI_DB_FILE"
-
-chmod 644 "$OUI_DB_FILE"
-rm -rf "$TMP_DIR"
-
-# =========================================================
 # Finish
 # =========================================================
 msg done
 echo
-echo "Run from anywhere:"
+echo "Run command:"
 echo "  netscan"
 echo
 echo "Install path:"
