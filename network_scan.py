@@ -321,9 +321,6 @@ def print_network_overview(ctx, net_range, start_time):
 [INFO] Network Range    : {net_range}
 [INFO] Scan Start Time  : {start_time}
 
-[اطلاعات شبکه]
-رنج شبکه           : {net_range}
-زمان شروع          : {start_time}
 """)
 
     # ---- LOCAL DEVICE ----
@@ -724,16 +721,29 @@ def calculate_arp_density(topology):
 
 
 #step2
-# اصلاح تابع enrich_device
 def enrich_device(device, ctx):
     """
-    تحلیل یک دستگاه بر اساس ARP / Vendor / Gateway
+    تحلیل یک دستگاه بر اساس ARP / Vendor / Gateway / TTL
     """
     enriched = device.copy()
 
-    ttl = extract_ttl_from_ping(device.get("ip"))
-    enriched["ttl"] = ttl
+    # ===================== TTL =====================
+    # گرفتن TTL از ping
+    ttl_value = extract_ttl_from_ping(device.get("ip"))
+    enriched["ttl"] = ttl_value
 
+    # نمایش کاربرپسند TTL
+    if ttl_value is not None:
+        if ttl_value <= 64:
+            enriched["ttl_display"] = f"{ttl_value} (Linux/Unix)"
+        elif ttl_value <= 128:
+            enriched["ttl_display"] = f"{ttl_value} (Windows)"
+        else:
+            enriched["ttl_display"] = f"{ttl_value} (Unknown OS)"
+    else:
+        enriched["ttl_display"] = "N/A"
+
+    # ===================== نقش و یادداشت =====================
     enriched["role"] = "unknown"      # gateway / ap / device
     enriched["behind"] = None         # parent device
     enriched["suspected_nat"] = False
@@ -1074,10 +1084,19 @@ def get_vendor(mac):
 
     prefix = mac_hex[:6]
 
-    if OUI_MODE == "online":
-        return lookup_oui_online(prefix)
+    # Offline mode
+    if OUI_MODE == "offline":
+        try:
+            db = load_oui_db()
+            return db.get(prefix, "Unknown")
+        except Exception:
+            return "Unknown"
 
-    return load_oui_db().get(prefix, "Unknown")
+    # Online mode
+    try:
+        return lookup_oui_online(prefix)
+    except Exception:
+        return "Unknown"
     
 
 # =========================================================
@@ -1371,8 +1390,7 @@ def perform_scan(ctx):
     def show_block(title_en, title_fa, data, icon):
         print(f"\n========== {title_en} | {title_fa} ==========")
         for d in data:
-            print(f"{icon} {d['ip']}  {d['mac']}  [{d['vendor']}]")
-
+            print(f"{icon} {d['ip']}  {d['mac']}  [{d['vendor']}]  TTL: {d['ttl_display']}")
     show_block("Active Devices", "دستگاه‌های فعال", active, "✅")
     show_block("ARP Only", "فقط در ARP", arp_only, "⚠️")
     show_block("Incomplete", "ناقص", incomplete, "❌")
