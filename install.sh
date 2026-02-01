@@ -78,11 +78,33 @@ done
 # =========================================================
 echo
 msg dbmode
+check_online_access() {
+  curl -fsI --max-time 3 https://standards-oui.ieee.org >/dev/null 2>&1
+}
 echo "1) Online  (Recommended)"
 echo "2) Offline (Local database)"
 read -p "> " OUI_CHOICE
 
-[[ "$OUI_CHOICE" == "2" ]] && OUI_MODE="offline" || OUI_MODE="online"
+if [[ "$OUI_CHOICE" == "2" ]]; then
+  OUI_MODE="offline"
+else
+  if check_online_access; then
+    OUI_MODE="online"
+  else
+    echo
+    echo "[!] Online access is not available."
+    echo "[!] IEEE OUI server not reachable."
+    read -p "Switch to Offline mode instead? (y/N): " fallback
+    if [[ "$fallback" =~ ^[Yy]$ ]]; then
+      OUI_MODE="offline"
+    else
+      echo "[!] Installation cancelled."
+      exit 1
+    fi
+  fi
+fi
+
+
 
 # =========================================================
 # Install Directory
