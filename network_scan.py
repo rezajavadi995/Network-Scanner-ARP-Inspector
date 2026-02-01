@@ -349,7 +349,15 @@ def print_network_overview(ctx, net_range, start_time):
 [INFO] Interface        : {ctx['interface']}
 [INFO] Interface Mode   : {ctx['iface_mode']}
 [INFO] Connection Name  : {ctx['connection_name']}
+[INFO] Medium (VM)      : {ctx.get('connection_medium')}
+[INFO] Underlying Media : {ctx.get('underlying_medium')}
+[INFO] SSID             : {ctx.get('ssid') or 'Unavailable (VM limitation)'}
+[INFO] Confidence       : {ctx.get('confidence')}
 """)
+    if ctx.get("analysis_reasons"):
+        print(FG_YELLOW + "[ANALYSIS]" + RESET)
+        for r in ctx["analysis_reasons"]:
+            print(" -", r)
 
     # ---- NETWORK CONTEXT ----
     print(FG_CYAN + BOLD + "==================== NETWORK CONTEXT ========================" + RESET)
