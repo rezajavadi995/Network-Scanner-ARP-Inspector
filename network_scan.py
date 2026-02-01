@@ -380,6 +380,7 @@ Vendor              : {ctx['vendor']}
     print(f"""
 Gateway IP          : {ctx['gateway']}
 Gateway MAC         : {ctx['gateway_mac']}
+Vendor              : {ctx.get('gateway_vendor', 'Unknown')}
 """)
 
     # ---- WARNINGS ----
@@ -664,6 +665,7 @@ def collect_base_reality():
     gw_ip, gw_mac = detect_gateway()
     ctx["gateway"] = gw_ip
     ctx["gateway_mac"] = gw_mac
+    ctx["gateway_vendor"] = gateway_vendor
 
     detect_nat_signs(ctx)
     detect_virtualization(ctx)
@@ -1143,6 +1145,7 @@ def get_vendor(mac):
     دریافت نام Vendor بر اساس MAC
     مسیر offline یا online بسته به OUI_MODE
     """
+    gateway_vendor = get_vendor(ctx.get("gateway_mac"))
     mac_hex = normalize_mac(mac)
     if not mac_hex:
         return "Unknown"
