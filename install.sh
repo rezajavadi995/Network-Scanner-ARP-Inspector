@@ -52,6 +52,13 @@ msg() {
 }
 
 # =========================================================
+# Helper: Online check
+# =========================================================
+check_online_access() {
+  curl -fsI --max-time 3 https://standards-oui.ieee.org >/dev/null 2>&1
+}
+
+# =========================================================
 # OS Check
 # =========================================================
 [[ "$OSTYPE" == "linux-gnu"* ]] || { echo "Linux only"; exit 1; }
@@ -60,6 +67,7 @@ msg() {
 # Dependencies
 # =========================================================
 msg checking
+sudo -v
 sudo apt update
 
 DEPENDENCIES=(python3 curl iproute2 iputils-ping gawk coreutils)
@@ -74,13 +82,20 @@ for pkg in "${DEPENDENCIES[@]}"; do
 done
 
 # =========================================================
+# Detect Existing Install
+# =========================================================
+if [[ -d "$INSTALL_DIR" ]]; then
+  echo
+  echo "[!] Existing installation detected at $INSTALL_DIR"
+  read -p "Overwrite existing installation? (y/N): " overwrite
+  [[ "$overwrite" =~ ^[Yy]$ ]] || exit 1
+fi
+
+# =========================================================
 # OUI Mode Selection
 # =========================================================
 echo
 msg dbmode
-check_online_access() {
-  curl -fsI --max-time 3 https://standards-oui.ieee.org >/dev/null 2>&1
-}
 echo "1) Online  (Recommended)"
 echo "2) Offline (Local database)"
 read -p "> " OUI_CHOICE
@@ -104,8 +119,6 @@ else
   fi
 fi
 
-
-
 # =========================================================
 # Install Directory
 # =========================================================
@@ -127,7 +140,6 @@ chmod +x network_scan.py
 # =========================================================
 if [[ "$OUI_MODE" == "online" ]]; then
   msg online
-  echo "OUI_MODE=online" > "$CONF_FILE"
 else
   msg offline_warn
   read -p "Continue? (y/N): " confirm
@@ -137,9 +149,10 @@ else
   mkdir -p "$TMP_DIR"
   RAW_FILE="$TMP_DIR/oui_raw.txt"
 
-  curl -# -fsSL \
-  https://standards-oui.ieee.org/oui/oui.txt \
-  -o "$RAW_FILE"
+  if ! curl -# -fsSL https://standards-oui.ieee.org/oui/oui.txt -o "$RAW_FILE"; then
+    echo "[!] Failed to download OUI database."
+    exit 1
+  fi
 
   gawk '
   {
@@ -153,9 +166,23 @@ else
   }
   ' "$RAW_FILE" | sort -u > "$OUI_DB_FILE"
 
+  RECORDS=$(wc -l < "$OUI_DB_FILE")
+  SIZE=$(du -h "$OUI_DB_FILE" | cut -f1)
+
+  echo "[✓] OUI database built successfully"
+  echo "    Records : $RECORDS"
+  echo "    Size    : $SIZE"
+
   rm -rf "$TMP_DIR"
-  echo "OUI_MODE=offline" > "$CONF_FILE"
 fi
+
+# =========================================================
+# Save Config
+# =========================================================
+{
+  echo "OUI_MODE=$OUI_MODE"
+  echo "LANG=$LANG"
+} > "$CONF_FILE"
 
 chmod 600 "$CONF_FILE"
 
