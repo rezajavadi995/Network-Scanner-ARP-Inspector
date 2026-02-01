@@ -504,18 +504,27 @@ def build_network_context():
     Build full base network reality context
     """
     context = {
-        "interface": None,
-        "medium": None,          # Wi-Fi / Ethernet
-        "iface_mode": None,      # Managed / Monitor / Unknown
-        "connection_name": None,
-        "ip": None,
-        "mac": None,
-        "vendor": None,
-        "gateway": None,
-        "gateway_mac": None,
-        "nat_suspected": False,
-        "virtual_suspected": False,
-        "warnings": []
+    "interface": None,
+    "medium": None,
+    "iface_mode": None,
+    "connection_name": None,
+
+    # --- NEW ---
+    "connection_medium": None,      # Ethernet / Wi-Fi (what VM sees)
+    "underlying_medium": None,      # Likely Wi-Fi (Host)
+    "ssid": None,                   # None → unavailable
+    "confidence": None,
+    "analysis_reasons": [],
+    # -----------
+
+    "ip": None,
+    "mac": None,
+    "vendor": None,
+    "gateway": None,
+    "gateway_mac": None,
+    "nat_suspected": False,
+    "virtual_suspected": False,
+    "warnings": []
     }
     return context
 
@@ -631,6 +640,7 @@ def detect_virtualization(context):
 def collect_base_reality():
     ctx = build_network_context()
 
+    # --------- شناسایی اولیه رابط و شبکه ---------
     iface = detect_active_interface()
     ctx["interface"] = iface
 
@@ -649,6 +659,16 @@ def collect_base_reality():
 
     detect_nat_signs(ctx)
     detect_virtualization(ctx)
+
+    # --------- تحلیل Underlying / SSID ---------
+    ctx["connection_medium"] = ctx.get("medium")
+
+    analysis = analyze_underlying_medium(ctx)
+    ctx["underlying_medium"] = analysis["underlying"]
+    ctx["confidence"] = analysis["confidence"]
+    ctx["analysis_reasons"] = analysis["reasons"]
+
+    ctx["ssid"] = None  # VM limitation
 
     return ctx
 
