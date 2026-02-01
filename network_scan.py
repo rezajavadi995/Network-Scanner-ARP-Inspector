@@ -64,6 +64,39 @@ if os.path.exists(CONF_FILE):
 print(f"[OUI] Vendor lookup mode: {OUI_MODE.upper()}")
 
 
+_OUI_CACHE = None
+
+def load_oui_db():
+    global _OUI_CACHE
+    if _OUI_CACHE is not None:
+        return _OUI_CACHE
+
+    db = {}
+    if not os.path.exists(OUI_DB_FILE):
+        return db
+
+    try:
+        with open(OUI_DB_FILE, "r", errors="ignore") as f:
+            for line in f:
+                if "|" in line:
+                    k, v = line.strip().split("|", 1)
+                    db[k.strip()] = v.strip()
+    except:
+        pass
+
+    _OUI_CACHE = db
+    return db
+    
+
+
+def lookup_oui_online(prefix):
+    try:
+        import urllib.request
+        url = f"https://api.macvendors.com/{prefix}"
+        with urllib.request.urlopen(url, timeout=2) as r:
+            return r.read().decode().strip()
+    except:
+        return None
 # =========================================================
 # ===================== Language & Tone ===================
 # =========================================================
