@@ -1562,7 +1562,3 @@ if __name__ == "__main__":
 
     if ctx["warnings"]:
         time.sleep(1.5)
-
-   
-
-    main_menu()
