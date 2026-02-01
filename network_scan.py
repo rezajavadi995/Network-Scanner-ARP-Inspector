@@ -264,6 +264,24 @@ def Tget(key):
         return T.get(key, TEXT["en"].get(key, key))
     except Exception:
         return key
+
+
+
+#=====TTL HELPER =============================================
+def stable_ttl_lookup(ip, retries=2, timeout=1):
+    """
+    Safe TTL extraction with retries
+    Returns int TTL or None
+    """
+    for _ in range(retries + 1):
+        try:
+            ttl = extract_ttl_from_ping(ip, timeout=timeout)
+            if isinstance(ttl, int) and 1 <= ttl <= 255:
+                return ttl
+        except Exception:
+            pass
+    return None
+    
 # =========================================================
 # ===================== Network ===========================
 # =========================================================
