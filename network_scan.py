@@ -1075,6 +1075,10 @@ def load_oui_db():
     return _OUI_CACHE
 
 def get_vendor(mac):
+    """
+    دریافت نام Vendor بر اساس MAC
+    مسیر offline یا online بسته به OUI_MODE
+    """
     mac_hex = normalize_mac(mac)
     if not mac_hex:
         return "Unknown"
@@ -1082,20 +1086,23 @@ def get_vendor(mac):
     if is_locally_administered(mac_hex):
         return "Randomized / Locally Administered"
 
-    prefix = mac_hex[:6]
-
-    # Offline mode
-    if OUI_MODE == "offline":
+    # مسیر آنلاین
+    if OUI_MODE == "online":
         try:
-            db = load_oui_db()
-            return db.get(prefix, "Unknown")
-        except Exception:
-            return "Unknown"
+            vendor = lookup_oui_online(mac_hex[:6])
+            if vendor:
+                return vendor
+            # اگر آنلاین نبود fallback به offline
+        except Exception as e:
+            print(f"[WARN] Online lookup failed: {e}")
+            print("[INFO] Falling back to offline database")
 
-    # Online mode
+    # مسیر offline
     try:
-        return lookup_oui_online(prefix)
-    except Exception:
+        db = load_oui_db()  # بارگذاری دیتابیس offline
+        return db.get(mac_hex[:6].upper(), "Unknown")
+    except Exception as e:
+        print(f"[WARN] Offline DB failed: {e}")
         return "Unknown"
     
 
