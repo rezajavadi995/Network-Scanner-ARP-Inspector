@@ -33,7 +33,36 @@ BASE_DIR = "/opt/network-scanner"
 CONF_FILE = f"{BASE_DIR}/.netscan.conf"
 OUI_DB_FILE = f"{BASE_DIR}/oui.db"
 BIN_PATH = "/usr/local/bin/netscan"
+
+
+
+# =========================================================
+# ===================== OUI Mode ==========================
+# =========================================================
 OUI_MODE = "offline"
+#=============================
+OUI_MODE = "offline"
+
+if os.path.exists(CONF_FILE):
+    try:
+        with open(CONF_FILE, "r") as f:
+            for line in f:
+                line = line.strip()
+
+                if not line:
+                    continue
+                if line.startswith("#"):
+                    continue
+
+                if line.startswith("OUI_MODE="):
+                    value = line.split("=", 1)[1].strip().lower()
+                    if value in ("online", "offline"):
+                        OUI_MODE = value
+    except Exception as e:
+        print(f"[WARN] Failed to read config file: {e}")
+
+print(f"[OUI] Vendor lookup mode: {OUI_MODE.upper()}")
+
 
 # =========================================================
 # ===================== Language & Tone ===================
@@ -1247,7 +1276,7 @@ def perform_scan(ctx):
 
     # ---- Overview ----
     print_network_overview(ctx, net_range=net, start_time=now)
-    print(f"[OUI] Vendor lookup mode: {OUI_MODE.upper()}")
+    #print(f"[OUI] Vendor lookup mode: {OUI_MODE.upper()}")
     #amureza
 
     ping_ok = {}
