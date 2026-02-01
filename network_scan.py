@@ -33,6 +33,7 @@ BASE_DIR = "/opt/network-scanner"
 CONF_FILE = f"{BASE_DIR}/.netscan.conf"
 OUI_DB_FILE = f"{BASE_DIR}/oui.db"
 BIN_PATH = "/usr/local/bin/netscan"
+OUI_MODE = "offline"
 
 # =========================================================
 # ===================== Language & Tone ===================
@@ -594,6 +595,7 @@ def detect_hidden_hops_by_ttl(topology):
 
     for ap in topology.get("aps", []):
         ttl_map = {}
+        ttl_count = 0
 
         for d in topology.get("devices", []):
             if d.get("behind") == ap["ip"]:
@@ -601,8 +603,9 @@ def detect_hidden_hops_by_ttl(topology):
                 if ttl:
                     ttl_map.setdefault(ttl, 0)
                     ttl_map[ttl] += 1
+                    ttl_count += 1
 
-        if len(ttl_map) >= 2:
+        if ttl_count >= 2 and len(ttl_map) >= 2:
             ap["notes"].append("Multiple TTL clusters detected")
             ap["hidden_hops"] = True
 
@@ -985,9 +988,17 @@ def get_vendor(mac):
     mac_hex = normalize_mac(mac)
     if not mac_hex:
         return "Unknown"
+
     if is_locally_administered(mac_hex):
         return "Randomized / Locally Administered"
-    return load_oui_db().get(mac_hex[:6], "Unknown")
+
+    prefix = mac_hex[:6]
+
+    if OUI_MODE == "online":
+        return lookup_oui_online(prefix)
+
+    return load_oui_db().get(prefix, "Unknown")
+    
 
 # =========================================================
 # ===================== System ===========================
@@ -1236,6 +1247,8 @@ def perform_scan(ctx):
 
     # ---- Overview ----
     print_network_overview(ctx, net_range=net, start_time=now)
+    print(f"[OUI] Vendor lookup mode: {OUI_MODE.upper()}")
+    #amureza
 
     ping_ok = {}
 
