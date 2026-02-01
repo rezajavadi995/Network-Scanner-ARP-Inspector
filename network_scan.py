@@ -1159,7 +1159,7 @@ def get_vendor(mac):
     دریافت نام Vendor بر اساس MAC
     مسیر offline یا online بسته به OUI_MODE
     """
-    gateway_vendor = get_vendor(ctx.get("gateway_mac"))
+    #gateway_vendor = get_vendor(ctx.get("gateway_mac"))
     mac_hex = normalize_mac(mac)
     if not mac_hex:
         return "Unknown"
