@@ -379,10 +379,9 @@ Vendor              : {ctx['vendor']}
     print(FG_CYAN + BOLD + "==================== GATEWAY INFO ===========================" + RESET)
     print(f"""
 Gateway IP          : {ctx['gateway']}
-Gateway MAC         : {ctx['gateway_mac']}
+Gateway MAC         : {ctx['gateway_mac']}  ({ctx.get('gateway_vendor', 'Unknown')})
 Vendor              : {ctx.get('gateway_vendor', 'Unknown')}
 """)
-
     # ---- WARNINGS ----
     if ctx["warnings"]:
         print(FG_RED + BOLD + "==================== WARNINGS ===============================" + RESET)
