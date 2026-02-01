@@ -647,7 +647,17 @@ def detect_virtualization(context):
 
 
 def collect_base_reality():
-    ctx = build_network_context()
+    """
+    جمع‌آوری تمام اطلاعات پایه شبکه و محیط اجرا
+    شامل:
+    - Interface، IP، MAC، Vendor سیستم
+    - Gateway IP، MAC و Vendor
+    - Medium واقعی و واسطه (Underlying Medium)
+    - SSID (در VM محدودیت دارد)
+    - تحلیل احتمال NAT و Virtualization
+    - جمع‌آوری هشدارها
+    """
+    ctx = build_network_context()  # پایه شبکه
 
     # --------- شناسایی اولیه رابط و شبکه ---------
     iface = detect_active_interface()
@@ -660,26 +670,31 @@ def collect_base_reality():
     ctx["connection_name"] = get_connection_name(iface)
     ctx["ip"] = get_my_ip()
     ctx["mac"] = get_my_mac(iface)
+
+    # Vendor خود سیستم
     ctx["vendor"] = get_vendor(ctx["mac"])
 
+    # --------- Gateway ---------
     gw_ip, gw_mac = detect_gateway()
     ctx["gateway"] = gw_ip
     ctx["gateway_mac"] = gw_mac
-    ctx["gateway_vendor"] = gateway_vendor
+    ctx["gateway_vendor"] = get_vendor(ctx["gateway_mac"])  # Vendor گیت‌وی
 
+    # --------- تحلیل NAT و Virtualization ---------
     detect_nat_signs(ctx)
     detect_virtualization(ctx)
 
     # --------- تحلیل Underlying / SSID ---------
-    ctx["connection_medium"] = ctx.get("medium")
+    ctx["connection_medium"] = ctx.get("medium")  # آنچه VM می‌بیند
 
     analysis = analyze_underlying_medium(ctx)
     ctx["underlying_medium"] = analysis["underlying"]
     ctx["confidence"] = analysis["confidence"]
     ctx["analysis_reasons"] = analysis["reasons"]
 
-    ctx["ssid"] = None  # VM limitation
+    ctx["ssid"] = None  # محدودیت VM: SSID قابل دسترس نیست
 
+    # --------- بازگشت Context کامل ---------
     return ctx
 
 
