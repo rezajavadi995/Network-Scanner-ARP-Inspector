@@ -296,7 +296,43 @@ ARP_DELAY = 0.4
 # ===================== Helpers ===========================
 # =========================================================
 
+def analyze_underlying_medium(ctx):
+    score = 0
+    reasons = []
 
+    # Virtual NIC
+    if ctx.get("virtual_suspected"):
+        score += 0.25
+        reasons.append("Virtual NIC detected")
+
+    # Private gateway
+    if ctx.get("gateway", "").startswith(("192.168.", "10.", "172.")):
+        score += 0.2
+        reasons.append("Private gateway")
+
+    # NAT suspected
+    if ctx.get("nat_suspected"):
+        score += 0.2
+        reasons.append("NAT detected")
+
+    # TTL variance (اگر داشتی)
+    if ctx.get("ttl_variance"):
+        score += 0.15
+        reasons.append("TTL variance")
+
+    # Cap
+    score = min(score, 1.0)
+
+    if score >= 0.6:
+        underlying = "Likely Wi-Fi (Host)"
+    else:
+        underlying = "Unknown"
+
+    return {
+        "underlying": underlying,
+        "confidence": round(score, 2),
+        "reasons": reasons
+    }
 
 
 def print_network_overview(ctx, net_range, start_time):
