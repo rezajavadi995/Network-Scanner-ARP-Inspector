@@ -1450,9 +1450,10 @@ def perform_scan(ctx):
         time.sleep(1)
         return
 
+    
     NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
-    START = 1
-    END = net.num_addresses - 2
+    START = net.network_address.packed[-1]
+    END = net.broadcast_address.packed[-1]
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
