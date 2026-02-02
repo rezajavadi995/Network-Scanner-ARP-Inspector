@@ -4,6 +4,7 @@
 import subprocess
 import sys
 import time
+import itertools
 import re
 import socket
 import struct
@@ -34,6 +35,18 @@ CONF_FILE = f"{BASE_DIR}/.netscan.conf"
 OUI_DB_FILE = f"{BASE_DIR}/oui.db"
 BIN_PATH = "/usr/local/bin/netscan"
 OUI_LOCAL_DB = OUI_DB_FILE
+
+# ===================== style progress bar  =====================
+BRAILLE_FRAMES = ["⠷", "⠿", "⠾", "⠶", "⠦", "⠤", "⠠"]
+spinner_cycle = itertools.cycle(BRAILLE_FRAMES)
+
+
+def render_progress_bar(percent, width=10):
+    """
+    ▓▓▓░░░░░░ style progress bar
+    """
+    filled = int((percent / 100) * width)
+    return "▓" * filled + "░" * (width - filled)
 # =========================================================
 # ===================== OUI Mode ==========================
 # =========================================================
@@ -1432,124 +1445,142 @@ def detect_interface_reality(iface):
 
 
 ####
+
 # =========================================================
 # ===================== Scan =============================
 # =========================================================
 def perform_scan(ctx):
     global NETWORK_BASE, START, END
 
-    iface = ctx["interface"]
-    my_ip = ctx["ip"]
+    try:
+        iface = ctx["interface"]
+        my_ip = ctx["ip"]
 
-    # ---- Range decision (dynamic) ----
-    net = network_range_flow()
-    if net is None:
-        print(FG_YELLOW + "[!] Scan cancelled by user | الان داری اسکن را لغو می‌کنی" + RESET)
-        time.sleep(1)
-        return
+        # ---- Range decision (dynamic) ----
+        net = network_range_flow()
+        if net is None:
+            print(FG_YELLOW + "[!] Scan cancelled by user | الان داری اسکن را لغو می‌کنی" + RESET)
+            time.sleep(1)
+            return
 
-    
-    NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
-    START = net.network_address.packed[-1]
-    END = net.broadcast_address.packed[-1]
+        NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
+        START = net.network_address.packed[-1]
+        END = net.broadcast_address.packed[-1]
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # ---- Overview ----
-    print_network_overview(ctx, net_range=net, start_time=now)
+        # ---- Overview ----
+        print_network_overview(ctx, net_range=net, start_time=now)
 
-    ping_ok = {}
+        ping_ok = {}
 
-    # ===================== Stage 1: Ping Sweep =====================
-    for i in range(START, END + 1):
-        ip = f"{NETWORK_BASE}{i}"
-        r = subprocess.run(
-            ["ping", "-c", "1", "-W", PING_TIMEOUT, ip],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-        ping_ok[ip] = (r.returncode == 0)
-
-        percent = int(((i - START + 1) / (END - START + 1)) * 100)
-        sys.stdout.write(f"\rScanning {ip}... {percent}% | درحال اسکن")
-        sys.stdout.flush()
-        time.sleep(BASE_DELAY)
-
-    print("\n[+] Ping phase done | مرحله پینگ تمام شد")
-    time.sleep(ARP_DELAY)
-
-    # ===================== Stage 1.5: ARP =====================
-    print("[+] Reading ARP table | خواندن جدول ARP\n")
-    arp = read_arp_enhanced()
-
-    active, arp_only, incomplete = [], [], []
-
-    for d in arp:
-        if d["ip"] == my_ip:
-            continue
-
-        if d["mac"] == "<incomplete>":
-            incomplete.append(d)
-        elif ping_ok.get(d["ip"]):
-            active.append(d)
-        else:
-            arp_only.append(d)
-
-    # ===================== ENRICH BEFORE DISPLAY (DEBUG FIX) =====================
-    enriched_active = [enrich_device(d, ctx) for d in active]
-    enriched_arp_only = [enrich_device(d, ctx) for d in arp_only]
-    enriched_incomplete = [enrich_device(d, ctx) for d in incomplete]
-
-    # ---- Output ----
-    def show_block(title_en, title_fa, data, icon):
-        print(f"\n========== {title_en} | {title_fa} ==========")
-        for d in data:
-            print(
-                f"{icon} {d.get('ip')}  {d.get('mac')}  "
-                f"[{d.get('vendor', 'Unknown')}]  "
-                f"TTL: {d.get('ttl_display', 'N/A')}"
+        # ===================== Stage 1: Ping Sweep =====================
+        for i in range(START, END + 1):
+            ip = f"{NETWORK_BASE}{i}"
+            r = subprocess.run(
+                ["ping", "-c", "1", "-W", PING_TIMEOUT, ip],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
             )
+            ping_ok[ip] = (r.returncode == 0)
 
-    show_block("Active Devices", "دستگاه‌های فعال", enriched_active, "✅")
-    show_block("ARP Only", "فقط در ARP", enriched_arp_only, "⚠️")
-    show_block("Incomplete", "ناقص", enriched_incomplete, "❌")
+            #percent = int(((i - START + 1) / (END - START + 1)) * 100)
+            #sys.stdout.write(f"\rScanning {ip}... {percent}% | درحال اسکن")
 
-    total = len(active) + len(arp_only) + len(incomplete)
+            percent = int(((i - START + 1) / (END - START + 1)) * 100)
 
-    print(f"""
-Total devices        : {total}
-Total with self      : {total + 1}
+        spinner = next(spinner_cycle)
+        bar = render_progress_bar(percent)
 
-تعداد کل دستگاه‌ها      : {total}
-با احتساب خود سیستم     : {total + 1}
+        sys.stdout.write(
+            "\r"
+            + FG_RED
+            + f"{spinner} [PING] {ip}  {bar}  {percent}%"
+            + RESET
+        )
 
-[✓] Scan completed successfully
-اسکن با موفقیت انجام شد
-""")
 
-    # ===================== Stage 2: Topology =====================
-    topology = build_topology(enriched_active + enriched_arp_only, ctx)
-    print_topology(topology)
+            
+            sys.stdout.flush()
+            time.sleep(BASE_DELAY)
 
-    # ===================== Stage 3: Logical Anomalies =====================
-    multi_net_alerts = detect_multiple_networks_behind_ap(topology)
-    wifi_nat_alerts = detect_wifi_behind_wifi(topology, ctx)
-    ttl_alerts = detect_hidden_hops_by_ttl(topology)
+        print("\n[+] Ping phase done | مرحله پینگ تمام شد")
+        time.sleep(ARP_DELAY)
 
-    print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts)
+        # ===================== Stage 1.5: ARP =====================
+        print("[+] Reading ARP table | خواندن جدول ARP\n")
+        arp = read_arp_enhanced()
 
-    # ===================== Stage 4: Mesh / Hidden Networks =====================
-    mesh_alerts = detect_mesh_or_hidden_subnets(topology)
+        active, arp_only, incomplete = [], [], []
 
-    print_stage4_alerts(
-        multi_net_alerts,
-        wifi_nat_alerts,
-        ttl_alerts,
-        mesh_alerts
-    )
+        for d in arp:
+            if d["ip"] == my_ip:
+                continue
 
-    input("\nPress Enter to continue | برای ادامه Enter بزن")
+            if d["mac"] == "<incomplete>":
+                incomplete.append(d)
+            elif ping_ok.get(d["ip"]):
+                active.append(d)
+            else:
+                arp_only.append(d)
 
+        # ===================== ENRICH BEFORE DISPLAY (DEBUG FIX) =====================
+        enriched_active = [enrich_device(d, ctx) for d in active]
+        enriched_arp_only = [enrich_device(d, ctx) for d in arp_only]
+        enriched_incomplete = [enrich_device(d, ctx) for d in incomplete]
+
+        # ---- Output (Hacker Style) ----
+        def show_block(title_en, title_fa, data, icon):
+            print(f"\n========== {title_en} | {title_fa} ==========")
+            for d in data:
+                ip = d.get('ip')
+                mac = d.get('mac')
+                vendor = d.get('vendor', 'Unknown')
+                ttl = d.get('ttl_display', 'N/A')
+                
+                print(FG_CYAN + f"{icon} {ip}" + FG_GREEN + f"  [{vendor}]" + FG_YELLOW + f"  MAC: {mac}" + FG_MAGENTA + f"  TTL: {ttl}" + RESET)
+
+        show_block("Active Devices", "دستگاه‌های فعال", enriched_active, "✅")
+        show_block("ARP Only", "فقط در ARP", enriched_arp_only, "⚠️")
+        show_block("Incomplete", "ناقص", enriched_incomplete, "❌")
+
+        total = len(active) + len(arp_only) + len(incomplete)
+
+        print(FG_BLUE + "\n╔════════════════════════════════╗" + RESET)
+        print(FG_BLUE + f"║ Total devices        : {total:<5}         ║" + RESET)
+        print(FG_BLUE + f"║ Total with self      : {total + 1:<5}         ║" + RESET)
+        print(FG_BLUE + "╚════════════════════════════════╝" + RESET)
+
+        print(FG_GREEN + "\n[✓] Scan completed successfully | اسکن با موفقیت انجام شد" + RESET)
+
+        # ===================== Stage 2: Topology =====================
+        topology = build_topology(enriched_active + enriched_arp_only, ctx)
+        print_topology(topology)
+
+        # ===================== Stage 3: Logical Anomalies =====================
+        multi_net_alerts = detect_multiple_networks_behind_ap(topology)
+        wifi_nat_alerts = detect_wifi_behind_wifi(topology, ctx)
+        ttl_alerts = detect_hidden_hops_by_ttl(topology)
+
+        print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts)
+
+        # ===================== Stage 4: Mesh / Hidden Networks =====================
+        mesh_alerts = detect_mesh_or_hidden_subnets(topology)
+
+        print_stage4_alerts(
+            multi_net_alerts,
+            wifi_nat_alerts,
+            ttl_alerts,
+            mesh_alerts
+        )
+
+        input("\nPress Enter to continue | برای ادامه Enter بزن")
+
+    except KeyboardInterrupt:
+        print("\n" + FG_RED + "[!] Scan interrupted by user" + RESET)
+        print(FG_GRAY + "اسکن توسط کاربر متوقف شد" + RESET)
+        time.sleep(0.5)
+        return
 
 # =========================================================
 # ===================== Menu ==============================
