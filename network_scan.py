@@ -33,9 +33,7 @@ BASE_DIR = "/opt/network-scanner"
 CONF_FILE = f"{BASE_DIR}/.netscan.conf"
 OUI_DB_FILE = f"{BASE_DIR}/oui.db"
 BIN_PATH = "/usr/local/bin/netscan"
-
-
-
+OUI_LOCAL_DB = OUI_DB_FILE
 # =========================================================
 # ===================== OUI Mode ==========================
 # =========================================================
