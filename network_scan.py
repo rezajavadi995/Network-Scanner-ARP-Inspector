@@ -1501,8 +1501,8 @@ def perform_scan(ctx):
 
 
             
-            sys.stdout.flush()
-            time.sleep(BASE_DELAY)
+        sys.stdout.flush()
+        time.sleep(BASE_DELAY)
 
         print("\n[+] Ping phase done | مرحله پینگ تمام شد")
         time.sleep(ARP_DELAY)
