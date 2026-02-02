@@ -1483,7 +1483,7 @@ def perform_scan(ctx):
             ip = f"{NETWORK_BASE}{i}"
 
             r = subprocess.run(
-                ["ping", "-c", "1", "-W", PING_TIMEOUT, ip],
+                ["ping", "-c", "1", "-W", str(PING_TIMEOUT), ip],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
