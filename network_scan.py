@@ -354,6 +354,22 @@ def print_network_overview(ctx, net_range, start_time):
 [INFO] SSID             : {ctx.get('ssid') or 'Unavailable (VM limitation)'}
 [INFO] Confidence       : {ctx.get('confidence')}
 """)
+
+    oui_mode = ctx.get("oui_mode", "unknown")
+
+    if oui_mode == "online":
+        oui_display = "Online (Live lookup)"
+    elif oui_mode == "offline":
+        oui_display = "Offline (Local database)"
+    else:
+        oui_display = "Unknown"
+
+    print(f"[INFO] OUI Database     : {oui_display}")
+    
+
+
+
+    
     if ctx.get("analysis_reasons"):
         print(FG_YELLOW + "[ANALYSIS]" + RESET)
         for r in ctx["analysis_reasons"]:
@@ -666,6 +682,9 @@ def collect_base_reality():
     if ctx["medium"] == "Wi-Fi":
         ctx["iface_mode"] = detect_wifi_mode(iface)
 
+    else:
+        ctx["iface_mode"] = "N/A"
+
     ctx["connection_name"] = get_connection_name(iface)
     ctx["ip"] = get_my_ip()
     ctx["mac"] = get_my_mac(iface)
@@ -682,6 +701,12 @@ def collect_base_reality():
     # --------- تحلیل NAT و Virtualization ---------
     detect_nat_signs(ctx)
     detect_virtualization(ctx)
+
+    # --------- OUI DATABASE MODE (NEW) ---------
+    if os.path.exists(OUI_LOCAL_DB):
+        ctx["oui_mode"] = "offline"
+    else:
+        ctx["oui_mode"] = "online"
 
     # --------- تحلیل Underlying / SSID ---------
     ctx["connection_medium"] = ctx.get("medium")  # آنچه VM می‌بیند
