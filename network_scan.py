@@ -801,6 +801,7 @@ def calculate_arp_density(topology):
 
 
 #step2
+#step2
 def enrich_device(device, ctx):
     """
     تحلیل یک دستگاه بر اساس ARP / Vendor / Gateway / TTL
@@ -808,11 +809,9 @@ def enrich_device(device, ctx):
     enriched = device.copy()
 
     # ===================== TTL =====================
-    # گرفتن TTL از ping
     ttl_value = extract_ttl_from_ping(device.get("ip"))
     enriched["ttl"] = ttl_value
 
-    # نمایش کاربرپسند TTL
     if ttl_value is not None:
         if ttl_value <= 64:
             enriched["ttl_display"] = f"{ttl_value} (Linux/Unix)"
@@ -824,8 +823,8 @@ def enrich_device(device, ctx):
         enriched["ttl_display"] = "N/A"
 
     # ===================== نقش و یادداشت =====================
-    enriched["role"] = "unknown"      # gateway / ap / device
-    enriched["behind"] = None         # parent device
+    enriched["role"] = "unknown"
+    enriched["behind"] = None
     enriched["suspected_nat"] = False
     enriched["suspected_virtual"] = False
     enriched["notes"] = enriched.get("notes", [])
@@ -858,13 +857,13 @@ def enrich_device(device, ctx):
         enriched["suspected_virtual"] = True
         enriched["notes"].append("Virtual NIC detected")
 
-    # NAT suspicion (heuristic)
+    # NAT suspicion
     if ctx.get("medium") == "Wi-Fi" and enriched["role"] == "device":
         enriched["suspected_nat"] = True
         enriched["notes"].append("Possible NAT behind Wi-Fi")
 
     return enriched
-
+    
 #build topology
 
 
@@ -1434,8 +1433,6 @@ def perform_scan(ctx):
 
     # ---- Overview ----
     print_network_overview(ctx, net_range=net, start_time=now)
-    #print(f"[OUI] Vendor lookup mode: {OUI_MODE.upper()}")
-    #amureza
 
     ping_ok = {}
 
@@ -1474,14 +1471,24 @@ def perform_scan(ctx):
         else:
             arp_only.append(d)
 
+    # ===================== ENRICH BEFORE DISPLAY (DEBUG FIX) =====================
+    enriched_active = [enrich_device(d, ctx) for d in active]
+    enriched_arp_only = [enrich_device(d, ctx) for d in arp_only]
+    enriched_incomplete = [enrich_device(d, ctx) for d in incomplete]
+
     # ---- Output ----
     def show_block(title_en, title_fa, data, icon):
         print(f"\n========== {title_en} | {title_fa} ==========")
         for d in data:
-            print(f"{icon} {d['ip']}  {d['mac']}  [{d['vendor']}]  TTL: {d['ttl_display']}")
-    show_block("Active Devices", "دستگاه‌های فعال", active, "✅")
-    show_block("ARP Only", "فقط در ARP", arp_only, "⚠️")
-    show_block("Incomplete", "ناقص", incomplete, "❌")
+            print(
+                f"{icon} {d.get('ip')}  {d.get('mac')}  "
+                f"[{d.get('vendor', 'Unknown')}]  "
+                f"TTL: {d.get('ttl_display', 'N/A')}"
+            )
+
+    show_block("Active Devices", "دستگاه‌های فعال", enriched_active, "✅")
+    show_block("ARP Only", "فقط در ARP", enriched_arp_only, "⚠️")
+    show_block("Incomplete", "ناقص", enriched_incomplete, "❌")
 
     total = len(active) + len(arp_only) + len(incomplete)
 
@@ -1497,18 +1504,12 @@ Total with self      : {total + 1}
 """)
 
     # ===================== Stage 2: Topology =====================
-    enriched_devices = []
-
-    for d in active + arp_only:
-        enriched_devices.append(enrich_device(d, ctx))
-
-    topology = build_topology(enriched_devices, ctx)
+    topology = build_topology(enriched_active + enriched_arp_only, ctx)
     print_topology(topology)
 
     # ===================== Stage 3: Logical Anomalies =====================
     multi_net_alerts = detect_multiple_networks_behind_ap(topology)
     wifi_nat_alerts = detect_wifi_behind_wifi(topology, ctx)
-
     ttl_alerts = detect_hidden_hops_by_ttl(topology)
 
     print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts)
@@ -1524,6 +1525,8 @@ Total with self      : {total + 1}
     )
 
     input("\nPress Enter to continue | برای ادامه Enter بزن")
+
+
 # =========================================================
 # ===================== Menu ==============================
 # =========================================================
