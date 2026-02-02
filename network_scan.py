@@ -417,7 +417,7 @@ Vendor              : {ctx.get('gateway_vendor', 'Unknown')}
             print(FG_RED + f"⚠️  {w}" + RESET)
         print(FG_RED + "============================================================\n" + RESET)
 
-    print(FG_GREEN + BOLD + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
+    #print(FG_GREEN + BOLD + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
     print()
 
 
