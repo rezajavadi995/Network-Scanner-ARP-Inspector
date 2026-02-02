@@ -1472,37 +1472,35 @@ def perform_scan(ctx):
         # ---- Overview ----
         print_network_overview(ctx, net_range=net, start_time=now)
 
+        print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
+
         ping_ok = {}
 
         # ===================== Stage 1: Ping Sweep =====================
         for i in range(START, END + 1):
             ip = f"{NETWORK_BASE}{i}"
+
             r = subprocess.run(
                 ["ping", "-c", "1", "-W", PING_TIMEOUT, ip],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+
             ping_ok[ip] = (r.returncode == 0)
 
-            #percent = int(((i - START + 1) / (END - START + 1)) * 100)
-            #sys.stdout.write(f"\rScanning {ip}... {percent}% | درحال اسکن")
-
             percent = int(((i - START + 1) / (END - START + 1)) * 100)
+            spinner = next(spinner_cycle)
+            bar = render_progress_bar(percent)
 
-        spinner = next(spinner_cycle)
-        bar = render_progress_bar(percent)
+            sys.stdout.write(
+                "\r"
+                + FG_RED
+                + f"{spinner} [PING] {ip}  {bar}  {percent}%"
+                + RESET
+            )
+            sys.stdout.flush()
 
-        sys.stdout.write(
-            "\r"
-            + FG_RED
-            + f"{spinner} [PING] {ip}  {bar}  {percent}%"
-            + RESET
-        )
-
-
-            
-        sys.stdout.flush()
-        time.sleep(BASE_DELAY)
+            time.sleep(BASE_DELAY)
 
         print("\n[+] Ping phase done | مرحله پینگ تمام شد")
         time.sleep(ARP_DELAY)
@@ -1524,7 +1522,7 @@ def perform_scan(ctx):
             else:
                 arp_only.append(d)
 
-        # ===================== ENRICH BEFORE DISPLAY (DEBUG FIX) =====================
+        # ===================== ENRICH BEFORE DISPLAY =====================
         enriched_active = [enrich_device(d, ctx) for d in active]
         enriched_arp_only = [enrich_device(d, ctx) for d in arp_only]
         enriched_incomplete = [enrich_device(d, ctx) for d in incomplete]
@@ -1533,12 +1531,13 @@ def perform_scan(ctx):
         def show_block(title_en, title_fa, data, icon):
             print(f"\n========== {title_en} | {title_fa} ==========")
             for d in data:
-                ip = d.get('ip')
-                mac = d.get('mac')
-                vendor = d.get('vendor', 'Unknown')
-                ttl = d.get('ttl_display', 'N/A')
-                
-                print(FG_CYAN + f"{icon} {ip}" + FG_GREEN + f"  [{vendor}]" + FG_YELLOW + f"  MAC: {mac}" + FG_MAGENTA + f"  TTL: {ttl}" + RESET)
+                print(
+                    FG_CYAN + f"{icon} {d.get('ip')}" +
+                    FG_GREEN + f"  [{d.get('vendor', 'Unknown')}]" +
+                    FG_YELLOW + f"  MAC: {d.get('mac')}" +
+                    FG_MAGENTA + f"  TTL: {d.get('ttl_display', 'N/A')}" +
+                    RESET
+                )
 
         show_block("Active Devices", "دستگاه‌های فعال", enriched_active, "✅")
         show_block("ARP Only", "فقط در ARP", enriched_arp_only, "⚠️")
