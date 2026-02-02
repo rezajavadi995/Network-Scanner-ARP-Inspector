@@ -1474,7 +1474,8 @@ def perform_scan(ctx):
         # ---- Overview ----
         print_network_overview(ctx, net_range=net, start_time=now)
 
-        print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
+        print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET, flush=True)
+        print()
 
         ping_ok = {}
 
@@ -1553,6 +1554,7 @@ def perform_scan(ctx):
         print(FG_BLUE + "╚════════════════════════════════╝" + RESET)
 
         print(FG_GREEN + "\n[✓] Scan completed successfully | اسکن با موفقیت انجام شد" + RESET)
+        
 
         # ===================== Stage 2: Topology =====================
         topology = build_topology(enriched_active + enriched_arp_only, ctx)
