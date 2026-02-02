@@ -52,7 +52,7 @@ def render_progress_bar(percent, width=10):
 # =========================================================
 OUI_MODE = "offline"
 #=============================
-OUI_MODE = "offline"
+
 
 if os.path.exists(CONF_FILE):
     try:
