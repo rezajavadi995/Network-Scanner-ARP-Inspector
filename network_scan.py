@@ -296,11 +296,13 @@ def stable_ttl_lookup(ip, retries=2, timeout=1):
 # =========================================================
 # ===================== Network ===========================
 # =========================================================
-NETWORK_BASE = "192.168.1."
+NETWORK_BASE = str(net.network_address).rsplit(".", 1)[0] + "."
+
 START = 1
-END = 254
-PING_TIMEOUT = "1"
-BASE_DELAY = 0.03
+END = net.num_addresses - 2
+
+PING_TIMEOUT = 1          # int، نه string
+BASE_DELAY = 0.03         # default، بعداً adaptive
 ARP_DELAY = 0.4
 
 # =========================================================
