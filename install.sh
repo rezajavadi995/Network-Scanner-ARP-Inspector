@@ -68,9 +68,33 @@ check_online_access() {
 # =========================================================
 # Dependencies
 # =========================================================
+apt_update_if_needed() {
+  local stamp="/var/lib/apt/periodic/update-success-stamp"
+  local max_age=$((2 * 24 * 3600)) # 2day
+
+  if [[ ! -f "$stamp" ]]; then
+    echo "[*] APT cache not found, updating..."
+    sudo apt update
+    return
+  fi
+
+  local now
+  now=$(date +%s)
+  local last
+  last=$(stat -c %Y "$stamp")
+
+  if (( now - last > max_age )); then
+    echo "[*] APT cache outdated (>6h), updating..."
+    sudo apt update
+  else
+    echo "[*] APT cache is fresh, skipping apt update"
+  fi
+}
+
 msg checking
 sudo -v
-sudo apt update
+#sudo apt update
+apt_update_if_needed
 
 DEPENDENCIES=(python3 curl iproute2 iputils-ping gawk coreutils)
 for pkg in "${DEPENDENCIES[@]}"; do
