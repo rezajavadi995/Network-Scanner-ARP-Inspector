@@ -830,14 +830,17 @@ def calculate_arp_density(topology):
 
 #step2
 #step2
-def enrich_device(device, ctx):
+def enrich_device(device, ctx, ping_ok):
     """
     تحلیل یک دستگاه بر اساس ARP / Vendor / Gateway / TTL
     """
     enriched = device.copy()
 
-    # ===================== TTL =====================
-    ttl_value = extract_ttl_from_ping(device.get("ip"))
+    ip = device.get("ip")
+    ttl_value = None
+    if ping_ok.get(ip):
+        ttl_value = ping_ok[ip]["ttl"]
+
     enriched["ttl"] = ttl_value
 
     if ttl_value is not None:
@@ -1484,7 +1487,11 @@ def perform_scan(ctx):
                     stderr=subprocess.DEVNULL,
                     text=True     
                 )
-                ping_ok[ip] = (r.returncode == 0)
+                ttl = extract_ttl_from_ping_output(r.stdout)
+                ping_ok[ip] = {
+                    "alive": r.returncode == 0,
+                    "ttl": ttl
+                }
 
             except KeyboardInterrupt:
                 # تمیز کردن خط progress قبل از خروج
@@ -1520,12 +1527,6 @@ def perform_scan(ctx):
         # =====================================================
         print("[+] Reading ARP table | خواندن جدول ARP\n")
         arp = read_arp_enhanced()
-
-        print(f"[DEBUG] ARP entries found: {len(arp)}", flush=True)
-
-        for d in arp[:5]:
-            print("[DEBUG] ARP:", d, flush=True)
-
         active, arp_only, incomplete = [], [], []
 
         for d in arp:
@@ -1534,16 +1535,19 @@ def perform_scan(ctx):
 
             if d["mac"] == "<incomplete>":
                 incomplete.append(d)
-            elif ping_ok.get(d["ip"]):
-                active.append(d)
             else:
-                arp_only.append(d)
+                ping_info = ping_ok.get(d["ip"])
+                 if ping_info and ping_info["alive"]:
+                     
+                     active.append(d)
+                 else:
+                    
+                     arp_only.append(d)
 
         # ===================== ENRICH BEFORE DISPLAY =====================
-        enriched_active = [enrich_device(d, ctx) for d in active]
-        enriched_arp_only = [enrich_device(d, ctx) for d in arp_only]
-        enriched_incomplete = [enrich_device(d, ctx) for d in incomplete]
-
+        enriched_active = [enrich_device(d, ctx, ping_ok) for d in active]
+        enriched_arp_only = [enrich_device(d, ctx, ping_ok) for d in arp_only]
+        enriched_incomplete = [enrich_device(d, ctx, ping_ok) for d in incomplete]
         # ---- Output (Hacker Style) ----
         def show_block(title_en, title_fa, data, icon):
             print(f"\n========== {title_en} | {title_fa} ==========")
