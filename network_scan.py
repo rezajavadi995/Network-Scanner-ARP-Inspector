@@ -1463,8 +1463,27 @@ def perform_scan(ctx):
         ping_ok = {}
 
         total_hosts = (END - START + 1)
-        host_indices = list(range(START, END + 1))
-        random.shuffle(host_indices)
+       # host_indices = list(range(START, END + 1))
+       # random.shuffle(host_indices)
+
+        real_start = START + 1
+        real_end = END - 1
+        if real_start > real_end:
+            
+            host_indices = list(range(START, END + 1))
+            
+        else:
+            host_indices = list(range(real_start, real_end + 1))
+
+        random.shuffle(host_indices) 
+
+    
+                
+                
+                
+             
+            
+        
         
 
         for idx, i in enumerate(host_indices, start=1):
@@ -1476,7 +1495,7 @@ def perform_scan(ctx):
 
             try:
                 r = subprocess.run(
-                    ["ping", "-c", "1", "-W", str(PING_TIMEOUT), ip],
+                    ["ping", "-n", "-c", "1", "-W", str(PING_TIMEOUT), ip],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                     text=True     
