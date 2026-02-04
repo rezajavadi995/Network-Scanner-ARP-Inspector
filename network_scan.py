@@ -1476,38 +1476,56 @@ def perform_scan(ctx):
         print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET, flush=True)
         print()
 
+        # =====================================================
+        # ================= Stage 1: Ping Sweep ===============
+        # =====================================================
         ping_ok = {}
 
-        # ===================== Stage 1: Ping Sweep =====================
-        for i in range(START, END + 1):
+        total_hosts = (END - START + 1)
+
+        for idx, i in enumerate(range(START, END + 1), start=1):
             ip = f"{NETWORK_BASE}{i}"
 
-            r = subprocess.run(
-                ["ping", "-c", "1", "-W", str(PING_TIMEOUT), ip],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+            try:
+                r = subprocess.run(
+                    ["ping", "-c", "1", "-W", str(PING_TIMEOUT), ip],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                ping_ok[ip] = (r.returncode == 0)
 
-            ping_ok[ip] = (r.returncode == 0)
+            except KeyboardInterrupt:
+                # تمیز کردن خط progress قبل از خروج
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                raise
 
-            percent = int(((i - START + 1) / (END - START + 1)) * 100)
+            # ---- Progress calculation ----
+            percent = int((idx / total_hosts) * 100)
             spinner = next(spinner_cycle)
             bar = render_progress_bar(percent)
 
+            # ---- Render progress bar (overwrite single line) ----
             sys.stdout.write(
                 "\r"
                 + FG_RED
-                + f"{spinner} [PING] {ip}  {bar}  {percent}%"
+                + f"{spinner} [PING] {ip:<15}  {bar}  {percent:>3}%"
                 + RESET
             )
             sys.stdout.flush()
 
             time.sleep(BASE_DELAY)
 
-        print("\n[+] Ping phase done | مرحله پینگ تمام شد")
+        # ---- Finalize progress bar line ----
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+        print(FG_GREEN + "[+] Ping phase done | مرحله پینگ تمام شد" + RESET, flush=True)
         time.sleep(ARP_DELAY)
 
-        # ===================== Stage 1.5: ARP =====================
+        # =====================================================
+        # ================= Stage 1.5: ARP ====================
+        # =====================================================
         print("[+] Reading ARP table | خواندن جدول ARP\n")
         arp = read_arp_enhanced()
 
@@ -1553,7 +1571,6 @@ def perform_scan(ctx):
         print(FG_BLUE + "╚════════════════════════════════╝" + RESET)
 
         print(FG_GREEN + "\n[✓] Scan completed successfully | اسکن با موفقیت انجام شد" + RESET)
-        
 
         # ===================== Stage 2: Topology =====================
         topology = build_topology(enriched_active + enriched_arp_only, ctx)
