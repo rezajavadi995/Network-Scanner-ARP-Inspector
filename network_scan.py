@@ -753,28 +753,19 @@ def print_base_reality(ctx):
 #------------helper2--------------------
 
 
-def extract_ttl_from_ping(ip):
-    """
-    FA:
-    استخراج TTL از پاسخ ping بدون ارسال پکت اضافی
+def extract_ttl_from_ping_output(ping_output):
+    if not ping_output:
+        return None
 
-    EN:
-    Extract TTL value from ping response
-    """
-    try:
-        p = subprocess.run(
-            ["ping", "-c", "1", "-W", "1", ip],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True
-        )
-        for line in p.stdout.splitlines():
-            if "ttl=" in line.lower():
-                ttl = line.lower().split("ttl=")[1].split()[0]
-                return int(ttl)
-    except:
-        pass
+    for line in ping_output.splitlines():
+        if "ttl=" in line.lower():
+            try:
+                return int(line.lower().split("ttl=")[1].split()[0])
+            except:
+                return None
     return None
+    
+
 
 #..
 def detect_hidden_hops_by_ttl(topology):
@@ -1489,8 +1480,9 @@ def perform_scan(ctx):
             try:
                 r = subprocess.run(
                     ["ping", "-c", "1", "-W", str(PING_TIMEOUT), ip],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True     
                 )
                 ping_ok[ip] = (r.returncode == 0)
 
