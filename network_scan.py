@@ -13,6 +13,7 @@ import signal
 import os
 from datetime import datetime
 import ipaddress
+from utils.validators import is_valid_ip, is_valid_cidr
 
 # ===================== Colors ===========================
 RESET   = "\033[0m"
@@ -1464,6 +1465,10 @@ def perform_scan(ctx):
 
         for idx, i in enumerate(range(START, END + 1), start=1):
             ip = f"{NETWORK_BASE}{i}"
+
+            if not is_valid_ip(ip):
+                print(f"{FG_RED}[SKIP] Invalid IP: {ip}{RESET}")
+                continue
 
             try:
                 r = subprocess.run(
