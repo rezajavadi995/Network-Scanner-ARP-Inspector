@@ -1537,12 +1537,11 @@ def perform_scan(ctx):
                 incomplete.append(d)
             else:
                 ping_info = ping_ok.get(d["ip"])
-                 if ping_info and ping_info["alive"]:
-                     
-                     active.append(d)
-                 else:
+            if ping_info and ping_info["alive"]:
+                active.append(d)
+            else:
                     
-                     arp_only.append(d)
+                arp_only.append(d)
 
         # ===================== ENRICH BEFORE DISPLAY =====================
         enriched_active = [enrich_device(d, ctx, ping_ok) for d in active]
