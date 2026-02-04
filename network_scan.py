@@ -79,24 +79,26 @@ _OUI_CACHE = None
 
 def load_oui_db():
     global _OUI_CACHE
+
     if _OUI_CACHE is not None:
         return _OUI_CACHE
 
-    db = {}
+    _OUI_CACHE = {}
+
     if not os.path.exists(OUI_DB_FILE):
-        return db
+        return _OUI_CACHE
 
     try:
-        with open(OUI_DB_FILE, "r", errors="ignore") as f:
+        with open(OUI_DB_FILE, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
                 if "|" in line:
-                    k, v = line.strip().split("|", 1)
-                    db[k.strip()] = v.strip()
-    except:
+                    oui, vendor = line.strip().split("|", 1)
+                    _OUI_CACHE[oui.upper()] = vendor.strip()
+    except Exception:
         pass
 
-    _OUI_CACHE = db
-    return db
+    return _OUI_CACHE
+    
     
 
 
@@ -1163,26 +1165,9 @@ def detect_network_range():
         pass
     return ipaddress.ip_network("192.168.1.0/24")
 
-# =========================================================
+
 # ===================== OUI DB =============================
 # =========================================================
-_OUI_CACHE = None
-
-def load_oui_db():
-    global _OUI_CACHE
-    if _OUI_CACHE is not None:
-        return _OUI_CACHE
-
-    _OUI_CACHE = {}
-    if not os.path.exists(OUI_DB_FILE):
-        return _OUI_CACHE
-
-    with open(OUI_DB_FILE, "r", encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            if "|" in line:
-                oui, vendor = line.strip().split("|", 1)
-                _OUI_CACHE[oui.upper()] = vendor.strip()
-    return _OUI_CACHE
 
 def get_vendor(mac):
     """
