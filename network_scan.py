@@ -6,6 +6,7 @@ import sys
 import time
 import itertools
 import re
+import random 
 import socket
 import struct
 import shutil
@@ -1462,8 +1463,11 @@ def perform_scan(ctx):
         ping_ok = {}
 
         total_hosts = (END - START + 1)
+        host_indices = list(range(START, END + 1))
+        random.shuffle(host_indices)
+        
 
-        for idx, i in enumerate(range(START, END + 1), start=1):
+        for idx, i in enumerate(host_indices, start=1):
             ip = f"{NETWORK_BASE}{i}"
 
             if not is_valid_ip(ip):
@@ -1502,8 +1506,13 @@ def perform_scan(ctx):
                 + RESET
             )
             sys.stdout.flush()
+            sleep_time = random.uniform(0.1, 0.5) 
+            time.sleep(sleep_time)
 
-            time.sleep(BASE_DELAY)
+        
+
+            #time.sleep(BASE_DELAY)
+        
 
         # ---- Finalize progress bar line ----
         sys.stdout.write("\n")
