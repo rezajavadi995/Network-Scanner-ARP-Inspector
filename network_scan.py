@@ -1529,6 +1529,11 @@ def perform_scan(ctx):
         print("[+] Reading ARP table | خواندن جدول ARP\n")
         arp = read_arp_enhanced()
 
+        print(f"[DEBUG] ARP entries found: {len(arp)}", flush=True)
+
+        for d in arp[:5]:
+            print("[DEBUG] ARP:", d, flush=True)
+
         active, arp_only, incomplete = [], [], []
 
         for d in arp:
