@@ -40,6 +40,7 @@ msg() {
     fa:online) echo "[+] استفاده از دیتابیس آنلاین (به‌روز)" ;;
     fa:offline_warn) echo "[!] هشدار: دیتابیس آفلاین ممکن است قدیمی باشد" ;;
     fa:building) echo "[+] ساخت دیتابیس آفلاین OUI (ممکن است کمی زمان ببرد)..." ;;
+    fa:utils) echo "[+] نصب ماژول‌های کمکی..." ;;
     fa:done) echo "[✓] نصب با موفقیت انجام شد" ;;
     en:checking) echo "[+] Checking system dependencies..." ;;
     en:downloading) echo "[+] Downloading main scanner script..." ;;
@@ -47,6 +48,7 @@ msg() {
     en:online) echo "[+] Using online OUI database (always up-to-date)" ;;
     en:offline_warn) echo "[!] Warning: Offline database may be outdated" ;;
     en:building) echo "[+] Building offline OUI database (this may take a while)..." ;;
+    en:utils) echo "[+] Setting up utility modules..." ;;
     en:done) echo "[✓] Installation completed successfully" ;;
   esac
 }
@@ -134,6 +136,32 @@ curl -# -fsSL \
 https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/main/network_scan.py \
 -o network_scan.py
 chmod +x network_scan.py
+
+# =========================================================
+# Download Utils Module (NEW)
+# =========================================================
+msg utils
+
+# ساخت پوشه utils
+mkdir -p utils
+
+# دانلود __init__.py
+echo "  [*] Downloading utils/__init__.py ..."
+curl -# -fsSL \
+https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/main/utils/__init__.py \
+-o utils/__init__.py
+
+# دانلود validators.py
+echo "  [*] Downloading utils/validators.py ..."
+curl -# -fsSL \
+https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/main/utils/validators.py \
+-o utils/validators.py
+
+# تنظیم دسترسی‌ها
+chmod 644 utils/__init__.py
+chmod 644 utils/validators.py
+
+echo "[✓] Utils module installed successfully"
 
 # =========================================================
 # OUI Handling
