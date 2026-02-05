@@ -12,9 +12,14 @@ OUI_DB_FILE="$INSTALL_DIR/oui.db"
 TMP_DIR="/tmp/netscan-oui"
 
 # =========================================================
+# TTY Safety (Prevents curl|bash + clear/read crashes)
+# =========================================================
+[[ -t 0 ]] || exec </dev/tty
+[[ -t 1 ]] && clear
+
+# =========================================================
 # Welcome
 # =========================================================
-clear
 echo "======================================="
 echo "  Network Scanner & ARP Inspector"
 echo "  Smart Installer"
@@ -115,7 +120,18 @@ if [[ -d "$INSTALL_DIR" ]]; then
   echo "[!] Existing installation detected at $INSTALL_DIR"
   read -p "Overwrite existing installation? (y/N): " overwrite
   [[ "$overwrite" =~ ^[Yy]$ ]] || exit 1
+
+  # HARD CLEAN to prevent curl: (23) write failures
+  sudo chattr -R -i "$INSTALL_DIR" 2>/dev/null || true
+  sudo rm -rf "$INSTALL_DIR"
 fi
+
+# =========================================================
+# Install Directory (Robust)
+# =========================================================
+sudo mkdir -p "$INSTALL_DIR"
+sudo chown -R "$USER":"$USER" "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 
 # =========================================================
 # OUI Mode Selection
@@ -146,17 +162,10 @@ else
 fi
 
 # =========================================================
-# Install Directory
-# =========================================================
-sudo mkdir -p "$INSTALL_DIR"
-sudo chown "$USER":"$USER" "$INSTALL_DIR"
-cd "$INSTALL_DIR"
-
-# =========================================================
 # Download Main Script
 # =========================================================
 msg downloading
-curl -# -fsSL \
+curl -fL --retry 3 --retry-delay 2 \
 https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/main/network_scan.py \
 -o network_scan.py
 chmod +x network_scan.py
@@ -171,13 +180,13 @@ mkdir -p utils
 
 # دانلود __init__.py
 echo "  [*] Downloading utils/__init__.py ..."
-curl -# -fsSL \
+curl -fL --retry 3 --retry-delay 2 \
 https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/main/utils/__init__.py \
 -o utils/__init__.py
 
 # دانلود validators.py
 echo "  [*] Downloading utils/validators.py ..."
-curl -# -fsSL \
+curl -fL --retry 3 --retry-delay 2 \
 https://raw.githubusercontent.com/rezajavadi995/Network-Scanner-ARP-Inspector/main/utils/validators.py \
 -o utils/validators.py
 
@@ -201,10 +210,9 @@ else
   mkdir -p "$TMP_DIR"
   RAW_FILE="$TMP_DIR/oui_raw.txt"
 
-  if ! curl -# -fsSL https://standards-oui.ieee.org/oui/oui.txt -o "$RAW_FILE"; then
-    echo "[!] Failed to download OUI database."
-    exit 1
-  fi
+  curl -fL --retry 3 --retry-delay 2 \
+  https://standards-oui.ieee.org/oui/oui.txt \
+  -o "$RAW_FILE"
 
   gawk '
   {
@@ -238,7 +246,9 @@ fi
 
 chmod 600 "$CONF_FILE"
 
+# =========================================================
 # Symlink
+# =========================================================
 sudo ln -sf "$INSTALL_DIR/network_scan.py" "$BIN_PATH"
 
 # =========================================================
