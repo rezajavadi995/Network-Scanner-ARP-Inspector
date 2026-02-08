@@ -50,6 +50,14 @@ def render_progress_bar(percent, width=10):
     """
     filled = int((percent / 100) * width)
     return "▓" * filled + "░" * (width - filled)
+
+def smooth_print(text, delay=0.02):
+    """
+    Print lines with a small delay to make output more readable.
+    """
+    for line in str(text).splitlines():
+        print(line)
+        time.sleep(delay)
 # =========================================================
 # ===================== OUI Mode ==========================
 # =========================================================
@@ -358,13 +366,14 @@ def print_network_overview(ctx, net_range, start_time):
     """
     چاپ اطلاعات کامل شبکه، دستگاه و هشدارها
     """
-    print(FG_CYAN + BOLD + "\n\n==================== NETWORK SCAN INITIATED ====================" + RESET)
-    print(FG_YELLOW + BOLD + "   Reza Javadi - Network Scanner" + RESET)
-    print(FG_CYAN + BOLD + "================================================================\n" + RESET)
+    smooth_print(FG_CYAN + BOLD + "\n\n==================== NETWORK SCAN INITIATED ====================" + RESET)
+    smooth_print(FG_YELLOW + BOLD + "   Reza Javadi - Network Scanner" + RESET)
+    smooth_print(FG_CYAN + BOLD + "================================================================\n" + RESET)
+    time.sleep(0.1)
 
     # ---- CONNECTION OVERVIEW ----
-    print(FG_CYAN + BOLD + "==================== CONNECTION OVERVIEW ====================" + RESET)
-    print(f"""
+    smooth_print(FG_CYAN + BOLD + "==================== CONNECTION OVERVIEW ====================" + RESET)
+    smooth_print(f"""
 [INFO] Interface        : {ctx['interface']}
 [INFO] Interface Mode   : {ctx['iface_mode']}
 [INFO] Connection Name  : {ctx['connection_name']}
@@ -383,49 +392,50 @@ def print_network_overview(ctx, net_range, start_time):
     else:
         oui_display = "Unknown"
 
-    print(f"[INFO] OUI Database     : {oui_display}")
+    smooth_print(f"[INFO] OUI Database     : {oui_display}")
     
 
 
 
     
     if ctx.get("analysis_reasons"):
-        print(FG_YELLOW + "[ANALYSIS]" + RESET)
+        smooth_print(FG_YELLOW + "[ANALYSIS]" + RESET)
         for r in ctx["analysis_reasons"]:
-            print(" -", r)
+            smooth_print(" - " + str(r))
 
     # ---- NETWORK CONTEXT ----
-    print(FG_CYAN + BOLD + "==================== NETWORK CONTEXT ========================" + RESET)
-    print(f"""
+    smooth_print(FG_CYAN + BOLD + "==================== NETWORK CONTEXT ========================" + RESET)
+    smooth_print(f"""
 [INFO] Network Range    : {net_range}
 [INFO] Scan Start Time  : {start_time}
 
 """)
 
     # ---- LOCAL DEVICE ----
-    print(FG_CYAN + BOLD + "==================== LOCAL DEVICE (YOU) =====================" + RESET)
-    print(f"""
+    smooth_print(FG_CYAN + BOLD + "==================== LOCAL DEVICE (YOU) =====================" + RESET)
+    smooth_print(f"""
 IP Address          : {ctx['ip']}
 MAC Address         : {ctx['mac']}
 Vendor              : {ctx['vendor']}
 """)
 
     # ---- GATEWAY INFO ----
-    print(FG_CYAN + BOLD + "==================== GATEWAY INFO ===========================" + RESET)
-    print(f"""
+    smooth_print(FG_CYAN + BOLD + "==================== GATEWAY INFO ===========================" + RESET)
+    smooth_print(f"""
 Gateway IP          : {ctx['gateway']}
 Gateway MAC         : {ctx['gateway_mac']}  ({ctx.get('gateway_vendor', 'Unknown')})
 Vendor              : {ctx.get('gateway_vendor', 'Unknown')}
 """)
     # ---- WARNINGS ----
     if ctx["warnings"]:
-        print(FG_RED + BOLD + "==================== WARNINGS ===============================" + RESET)
+        smooth_print(FG_RED + BOLD + "==================== WARNINGS ===============================" + RESET)
         for w in ctx["warnings"]:
-            print(FG_RED + f"⚠️  {w}" + RESET)
-        print(FG_RED + "============================================================\n" + RESET)
+            smooth_print(FG_RED + f"⚠️  {w}" + RESET)
+        smooth_print(FG_RED + "============================================================\n" + RESET)
 
     #print(FG_GREEN + BOLD + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
     print()
+    time.sleep(0.1)
 
 
 def ip_to_int(ip):
@@ -772,19 +782,20 @@ def collect_base_reality():
 
 
 def print_base_reality(ctx):
-    print(FG_CYAN + BOLD + "\n========== NETWORK REALITY CHECK ==========" + RESET)
+    smooth_print(FG_CYAN + BOLD + "\n========== NETWORK REALITY CHECK ==========" + RESET)
 
     for k, v in ctx.items():
         if k == "warnings":
             continue
-        print(f"{k:18} : {v}")
+        smooth_print(f"{k:18} : {v}")
 
     if ctx["warnings"]:
-        print(FG_RED + BOLD + "\n[WARNINGS]" + RESET)
+        smooth_print(FG_RED + BOLD + "\n[WARNINGS]" + RESET)
         for w in ctx["warnings"]:
-            print(FG_RED + f" - {w}" + RESET)
+            smooth_print(FG_RED + f" - {w}" + RESET)
 
-    print(FG_CYAN + "==========================================\n" + RESET)
+    smooth_print(FG_CYAN + "==========================================\n" + RESET)
+    time.sleep(0.1)
 
 
 #------------helper2--------------------
@@ -976,18 +987,18 @@ def build_topology(devices, ctx):
 
 
 def print_topology(topology):
-    print(FG_CYAN + BOLD + "\n==================== NETWORK TOPOLOGY (GUESS) ====================" + RESET)
+    smooth_print(FG_CYAN + BOLD + "\n==================== NETWORK TOPOLOGY (GUESS) ====================" + RESET)
 
     gw = topology.get("gateway")
     if gw:
-        print(FG_GREEN + f"⚛ Gateway: {gw['ip']}  {gw.get('vendor','')}" + RESET)
+        smooth_print(FG_GREEN + f"⚛ Gateway: {gw['ip']}  {gw.get('vendor','')}" + RESET)
         for note in gw.get("notes", []):
-            print(FG_GREEN + f"   └─ {note}" + RESET)
+            smooth_print(FG_GREEN + f"   └─ {note}" + RESET)
 
     for ap in topology.get("aps", []):
-        print(FG_BLUE + f"➿ AP: {ap['ip']}  {ap.get('vendor','')}" + RESET)
+        smooth_print(FG_BLUE + f"➿ AP: {ap['ip']}  {ap.get('vendor','')}" + RESET)
         for note in ap.get("notes", []):
-            print(FG_BLUE + f"   └─ {note}" + RESET)
+            smooth_print(FG_BLUE + f"   └─ {note}" + RESET)
 
     for d in topology.get("devices", []):
         color = FG_GREEN
@@ -1000,15 +1011,15 @@ def print_topology(topology):
             color = FG_YELLOW
             icon = "✴️"
 
-        print(color + f"{icon} Device: {d['ip']}  {d.get('vendor','')}" + RESET)
+        smooth_print(color + f"{icon} Device: {d['ip']}  {d.get('vendor','')}" + RESET)
 
         if d.get("behind"):
-            print(color + f"   └─ Behind: {d['behind']}" + RESET)
+            smooth_print(color + f"   └─ Behind: {d['behind']}" + RESET)
 
         for note in d.get("notes", []):
-            print(color + f"   └─ {note}" + RESET)
+            smooth_print(color + f"   └─ {note}" + RESET)
 
-    print(FG_CYAN + "==================================================================\n" + RESET)
+    smooth_print(FG_CYAN + "==================================================================\n" + RESET)
 
 
 
@@ -1084,34 +1095,34 @@ def detect_wifi_behind_wifi(topology, ctx):
 #3.3
 
 def print_stage3_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts):
-    print(FG_RED + BOLD + "\n==================== TOPOLOGY WARNINGS ====================" + RESET)
+    smooth_print(FG_RED + BOLD + "\n==================== TOPOLOGY WARNINGS ====================" + RESET)
 
     if not multi_net_alerts and not wifi_nat_alerts and not ttl_alerts:
-        print(FG_GREEN + "✔ No critical topology anomalies detected" + RESET)
+        smooth_print(FG_GREEN + "✔ No critical topology anomalies detected" + RESET)
         return
 
     for a in multi_net_alerts:
-        print(
+        smooth_print(
             FG_YELLOW +
             f"⚠️  Multiple networks behind AP {a['ap']} -> {', '.join(a['subnets'])}"
             + RESET
         )
 
     for a in wifi_nat_alerts:
-        print(
+        smooth_print(
             FG_RED +
             f"🔥 Wi-Fi behind Wi-Fi detected at AP {a['ap']} ({a['reason']})"
             + RESET
         )
 
     for a in ttl_alerts:
-        print(
+        smooth_print(
             FG_RED +
             f"🧬 Hidden hops behind AP {a['ap']} | TTL clusters: {a['ttls']}"
             + RESET
         )
 
-    print(FG_RED + "===========================================================\n" + RESET)
+    smooth_print(FG_RED + "===========================================================\n" + RESET)
 
 
 #step4--------- ARP density + Vendor clustering برای تشخیص Mesh و Load‑balancer
@@ -1177,7 +1188,7 @@ def print_stage4_alerts(multi_net_alerts, wifi_nat_alerts, ttl_alerts, mesh_aler
         return
 
     for a in mesh_alerts:
-        print(
+        smooth_print(
             FG_MAGENTA +
             f"🌐 Mesh/Hidden subnet suspected at AP {a['ap']} | ARP density: {a['arp_density']} | Vendors: {list(a['vendor_clusters'].keys())}"
             + RESET
@@ -1503,7 +1514,8 @@ def perform_scan(ctx):
         # ---- Overview ----
         print_network_overview(ctx, net_range=net, start_time=now)
 
-        print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET, flush=True)
+        smooth_print(FG_GREEN + "[+] Scan started... | اسکن شبکه شروع شد" + RESET)
+        time.sleep(0.1)
         print()
 
         # =====================================================
@@ -1570,13 +1582,14 @@ def perform_scan(ctx):
         sys.stdout.write("\n")
         sys.stdout.flush()
 
-        print(FG_GREEN + "[+] Ping phase done | مرحله پینگ تمام شد" + RESET, flush=True)
+        smooth_print(FG_GREEN + "[+] Ping phase done | مرحله پینگ تمام شد" + RESET)
         time.sleep(ARP_DELAY)
 
         # =====================================================
         # ================= Stage 1.5: ARP ====================
         # =====================================================
-        print("[+] Reading ARP table | خواندن جدول ARP\n")
+        smooth_print("[+] Reading ARP table | خواندن جدول ARP")
+        print()
         arp = read_arp_enhanced()
         active, arp_only, incomplete = [], [], []
 
@@ -1600,9 +1613,9 @@ def perform_scan(ctx):
         enriched_incomplete = [enrich_device(d, ctx, ping_ok) for d in incomplete]
         # ---- Output (Hacker Style) ----
         def show_block(title_en, title_fa, data, icon):
-            print(f"\n========== {title_en} | {title_fa} ==========")
+            smooth_print(f"\n========== {title_en} | {title_fa} ==========")
             for d in data:
-                print(
+                smooth_print(
                     FG_CYAN + f"{icon} {d.get('ip')}" +
                     FG_GREEN + f"  [{d.get('vendor', 'Unknown')}]" +
                     FG_YELLOW + f"  MAC: {d.get('mac')}" +
@@ -1616,12 +1629,12 @@ def perform_scan(ctx):
 
         total = len(active) + len(arp_only) + len(incomplete)
 
-        print(FG_BLUE + "\n╔════════════════════════════════╗" + RESET)
-        print(FG_BLUE + f"║ Total devices        : {total:<5}         ║" + RESET)
-        print(FG_BLUE + f"║ Total with self      : {total + 1:<5}         ║" + RESET)
-        print(FG_BLUE + "╚════════════════════════════════╝" + RESET)
+        smooth_print(FG_BLUE + "\n╔════════════════════════════════╗" + RESET)
+        smooth_print(FG_BLUE + f"║ Total devices        : {total:<5}         ║" + RESET)
+        smooth_print(FG_BLUE + f"║ Total with self      : {total + 1:<5}         ║" + RESET)
+        smooth_print(FG_BLUE + "╚════════════════════════════════╝" + RESET)
 
-        print(FG_GREEN + "\n[✓] Scan completed successfully | اسکن با موفقیت انجام شد" + RESET)
+        smooth_print(FG_GREEN + "\n[✓] Scan completed successfully | اسکن با موفقیت انجام شد" + RESET)
 
         # ===================== Stage 2: Topology =====================
         topology = build_topology(enriched_active + enriched_arp_only, ctx)
