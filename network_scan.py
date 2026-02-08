@@ -143,6 +143,9 @@ def apply_profile_settings():
         BASE_DELAY = settings["BASE_DELAY"]
     if "ARP_DELAY" in settings:
         ARP_DELAY = settings["ARP_DELAY"]
+    for line in str(text).splitlines():
+        print(line)
+        time.sleep(delay)
 # =========================================================
 # ===================== OUI Mode ==========================
 # =========================================================
