@@ -15,7 +15,48 @@ import os
 import urllib.request
 from datetime import datetime
 import ipaddress
-from utils.validators import is_valid_ip, is_valid_cidr
+from utils.validators import (
+    append_operation_log,
+    build_report_paths,
+    build_scan_record,
+    calculate_packet_loss,
+    classify_device,
+    compare_scan_summaries,
+    compute_ip_usage,
+    detect_gateway_mac_change,
+    detect_high_latency,
+    detect_low_response_rate,
+    detect_scan_mismatch,
+    detect_unknown_devices,
+    detect_watchlist_hits,
+    detect_duplicate_ips,
+    detect_missing_hostnames,
+    get_config_bool,
+    get_profile,
+    guess_os_by_ttl,
+    guess_role,
+    guess_vlan,
+    is_random_mac,
+    is_valid_ip,
+    is_valid_cidr,
+    load_last_scan,
+    load_profiles,
+    load_watchlist,
+    parse_ping_time_ms,
+    read_config_file,
+    resolve_hostname,
+    save_last_scan,
+    save_profiles,
+    summarize_changes,
+    track_online_offline,
+    unusual_vendor,
+    vendor_confidence,
+    write_config_file,
+    write_html_report,
+    write_json_report,
+    append_scan_history,
+    update_profile,
+)
 
 # ===================== Colors ===========================
 RESET   = "\033[0m"
@@ -30,6 +71,10 @@ FG_CYAN  = "\033[96m"
 FG_GRAY  = "\033[90m"
 FG_MAGENTA = "\033[95m"
 
+SILENT_MODE = False
+COLOR_WARNINGS = True
+ACTIVE_PROFILE = "default"
+
 # =========================================================
 # ===================== Paths =============================
 # =========================================================
@@ -38,6 +83,12 @@ CONF_FILE = f"{BASE_DIR}/.netscan.conf"
 OUI_DB_FILE = f"{BASE_DIR}/oui.db"
 BIN_PATH = "/usr/local/bin/netscan"
 OUI_LOCAL_DB = OUI_DB_FILE
+DATA_DIR = f"{BASE_DIR}/data"
+HISTORY_FILE = f"{DATA_DIR}/scan_history.json"
+LAST_SCAN_FILE = f"{DATA_DIR}/last_scan.json"
+LOG_FILE = f"{DATA_DIR}/scan.log"
+WATCHLIST_FILE = f"{DATA_DIR}/watchlist.json"
+PROFILE_FILE = f"{DATA_DIR}/profiles.json"
 
 # ===================== style progress bar  =====================
 BRAILLE_FRAMES = ["⠷", "⠿", "⠾", "⠶", "⠦", "⠤", "⠠"]
@@ -55,6 +106,43 @@ def smooth_print(text, delay=0.02):
     """
     Print lines with a small delay to make output more readable.
     """
+    if SILENT_MODE:
+        delay = 0
+    for line in str(text).splitlines():
+        print(line)
+        time.sleep(delay)
+
+
+def color_text(text, color_code):
+    if COLOR_WARNINGS:
+        return f"{color_code}{text}{RESET}"
+    return text
+
+
+def ensure_data_paths():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if not os.path.exists(WATCHLIST_FILE):
+        with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+            f.write("{\"ips\": [], \"macs\": []}\n")
+    if not os.path.exists(PROFILE_FILE):
+        defaults = load_profiles(PROFILE_FILE)
+        save_profiles(PROFILE_FILE, defaults)
+
+
+def load_profile_settings():
+    profiles = load_profiles(PROFILE_FILE)
+    return get_profile(profiles, ACTIVE_PROFILE)
+
+
+def apply_profile_settings():
+    global PING_TIMEOUT, BASE_DELAY, ARP_DELAY
+    settings = load_profile_settings()
+    if "PING_TIMEOUT" in settings:
+        PING_TIMEOUT = settings["PING_TIMEOUT"]
+    if "BASE_DELAY" in settings:
+        BASE_DELAY = settings["BASE_DELAY"]
+    if "ARP_DELAY" in settings:
+        ARP_DELAY = settings["ARP_DELAY"]
     for line in str(text).splitlines():
         print(line)
         time.sleep(delay)
@@ -140,6 +228,16 @@ if os.path.exists(CONF_FILE):
     except:
         pass
 
+config_values, _config_lines = read_config_file(CONF_FILE)
+SILENT_MODE = get_config_bool(config_values, "SILENT_MODE", default=False)
+COLOR_WARNINGS = get_config_bool(config_values, "COLOR_WARNINGS", default=True)
+ACTIVE_PROFILE = config_values.get("ACTIVE_PROFILE", "default")
+profiles = load_profiles(PROFILE_FILE)
+active_profile = get_profile(profiles, ACTIVE_PROFILE)
+if active_profile:
+    SILENT_MODE = active_profile.get("silent_mode", SILENT_MODE)
+    COLOR_WARNINGS = active_profile.get("color_warnings", COLOR_WARNINGS)
+
 # =========================================================
 # ===================== TEXT (FULL MERGED) ================
 # =========================================================
@@ -150,7 +248,8 @@ TEXT = {
         "menu_option_scan": "1) Start Network Scan",
         "menu_option_update": "2) Update Script",
         "menu_option_uninstall": "3) Uninstall",
-        "menu_option_exit": "4) Exit",
+        "menu_option_settings": "4) Settings & Scheduler",
+        "menu_option_exit": "5) Exit",
         "prompt_choice": "Enter your choice",
 
         # ---- Info ----
@@ -218,7 +317,8 @@ TEXT = {
         "menu_option_scan": "1) شروع اسکن شبکه",
         "menu_option_update": "2) بروزرسانی اسکریپت",
         "menu_option_uninstall": "3) حذف برنامه",
-        "menu_option_exit": "4) خروج",
+        "menu_option_settings": "4) تنظیمات و زمان‌بندی",
+        "menu_option_exit": "5) خروج",
         "prompt_choice": "انتخاب شما",
 
         "info_interface": "اینترفیس",
@@ -886,18 +986,15 @@ def enrich_device(device, ctx, ping_ok):
 
     ip = device.get("ip")
     ttl_value = None
+    rtt_ms = None
     if ping_ok.get(ip):
-        ttl_value = ping_ok[ip]["ttl"]
+        ttl_value = ping_ok[ip].get("ttl")
+        rtt_ms = ping_ok[ip].get("rtt_ms")
 
     enriched["ttl"] = ttl_value
-
+    os_guess = guess_os_by_ttl(ttl_value)
     if ttl_value is not None:
-        if ttl_value <= 64:
-            enriched["ttl_display"] = f"{ttl_value} (Linux/Unix)"
-        elif ttl_value <= 128:
-            enriched["ttl_display"] = f"{ttl_value} (Windows)"
-        else:
-            enriched["ttl_display"] = f"{ttl_value} (Unknown OS)"
+        enriched["ttl_display"] = f"{ttl_value} ({os_guess})"
     else:
         enriched["ttl_display"] = "N/A"
 
@@ -940,6 +1037,15 @@ def enrich_device(device, ctx, ping_ok):
     if ctx.get("medium") == "Wi-Fi" and enriched["role"] == "device":
         enriched["suspected_nat"] = True
         enriched["notes"].append("Possible NAT behind Wi-Fi")
+
+    enriched["hostname"] = resolve_hostname(ip)
+    enriched["vendor_confidence"] = vendor_confidence(device.get("vendor"))
+    enriched["random_mac"] = is_random_mac(mac)
+    enriched["unusual_vendor"] = unusual_vendor(device.get("vendor"))
+    enriched["classification"] = classify_device(device.get("vendor"), enriched["role"])
+    enriched["role_guess"] = guess_role(ip, ctx.get("gateway"))
+    enriched["vlan_guess"] = guess_vlan(ip, ctx.get("network"))
+    enriched["rtt_ms"] = rtt_ms
 
     return enriched
     
@@ -1495,21 +1601,30 @@ def detect_interface_reality(iface):
 # =========================================================
 # ===================== Scan =============================
 # =========================================================
-def perform_scan(ctx):
+def perform_scan(ctx, scheduled=False, net_override=None):
     global NETWORK_BASE, START, END
 
     try:
         iface = ctx["interface"]
         my_ip = ctx["ip"]
+        ensure_data_paths()
+        prev_scan = load_last_scan(LAST_SCAN_FILE)
+        watchlist = load_watchlist(WATCHLIST_FILE)
 
         # ---- Range decision (dynamic) ----
-        net = network_range_flow()
+        if scheduled and net_override:
+            net = net_override
+        else:
+            net = network_range_flow()
         if net is None:
             print(FG_YELLOW + "[!] Scan cancelled by user | الان داری اسکن را لغو می‌کنی" + RESET)
             time.sleep(1)
             return
+        ctx["network"] = str(net)
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp_label = datetime.now().strftime("%Y%m%d_%H%M%S")
+        append_operation_log(LOG_FILE, f"Scan started on iface={iface} range={net}")
 
         # ---- Overview ----
         print_network_overview(ctx, net_range=net, start_time=now)
@@ -1546,9 +1661,11 @@ def perform_scan(ctx):
                     text=True     
                 )
                 ttl = extract_ttl_from_ping_output(r.stdout)
+                rtt_ms = parse_ping_time_ms(r.stdout)
                 ping_ok[ip] = {
                     "alive": r.returncode == 0,
-                    "ttl": ttl
+                    "ttl": ttl,
+                    "rtt_ms": rtt_ms,
                 }
 
             except KeyboardInterrupt:
@@ -1582,6 +1699,7 @@ def perform_scan(ctx):
         sys.stdout.write("\n")
         sys.stdout.flush()
 
+        alive_count = sum(1 for v in ping_ok.values() if v.get("alive"))
         smooth_print(FG_GREEN + "[+] Ping phase done | مرحله پینگ تمام شد" + RESET)
         time.sleep(ARP_DELAY)
 
@@ -1611,6 +1729,28 @@ def perform_scan(ctx):
         enriched_active = [enrich_device(d, ctx, ping_ok) for d in active]
         enriched_arp_only = [enrich_device(d, ctx, ping_ok) for d in arp_only]
         enriched_incomplete = [enrich_device(d, ctx, ping_ok) for d in incomplete]
+        enriched_devices = enriched_active + enriched_arp_only + enriched_incomplete
+
+        packet_loss = calculate_packet_loss(total_hosts, alive_count)
+        response_alert, response_rate = detect_low_response_rate(
+            total_hosts, alive_count,
+            threshold_percent=active_profile.get("low_response_threshold", 35)
+        )
+        high_latency = detect_high_latency(
+            ping_ok,
+            threshold_ms=active_profile.get("latency_threshold_ms", 150)
+        )
+        duplicate_ips = detect_duplicate_ips(enriched_active + enriched_arp_only)
+        missing_hostnames = detect_missing_hostnames(enriched_active + enriched_arp_only)
+        unknown_devices = detect_unknown_devices(prev_scan, {"devices": enriched_devices})
+        watch_hits = detect_watchlist_hits(watchlist, enriched_active + enriched_arp_only)
+        gw_change, prev_gw_mac, current_gw_mac = detect_gateway_mac_change(
+            prev_scan, {"devices": enriched_devices}, ctx.get("gateway")
+        )
+        came_online, went_offline = track_online_offline(
+            prev_scan, {"devices": enriched_devices}
+        )
+        usage_percent = compute_ip_usage(total_hosts, len(enriched_devices))
         # ---- Output (Hacker Style) ----
         def show_block(title_en, title_fa, data, icon):
             smooth_print(f"\n========== {title_en} | {title_fa} ==========")
@@ -1621,6 +1761,18 @@ def perform_scan(ctx):
                     FG_YELLOW + f"  MAC: {d.get('mac')}" +
                     FG_MAGENTA + f"  TTL: {d.get('ttl_display', 'N/A')}" +
                     RESET
+                )
+                smooth_print(
+                    FG_GRAY
+                    + f"   Hostname: {d.get('hostname') or 'N/A'} | "
+                    + f"Class: {d.get('classification')} | "
+                    + f"Role: {d.get('role')} | "
+                    + f"RoleGuess: {d.get('role_guess')} | "
+                    + f"VLAN: {d.get('vlan_guess')} | "
+                    + f"VendorConf: {d.get('vendor_confidence')} | "
+                    + f"RandomMAC: {d.get('random_mac')} | "
+                    + f"UnusualVendor: {d.get('unusual_vendor')}"
+                    + RESET
                 )
 
         show_block("Active Devices", "دستگاه‌های فعال", enriched_active, "✅")
@@ -1633,6 +1785,42 @@ def perform_scan(ctx):
         smooth_print(FG_BLUE + f"║ Total devices        : {total:<5}         ║" + RESET)
         smooth_print(FG_BLUE + f"║ Total with self      : {total + 1:<5}         ║" + RESET)
         smooth_print(FG_BLUE + "╚════════════════════════════════╝" + RESET)
+        smooth_print(FG_BLUE + f"Packet loss            : {packet_loss:.2f}% (rate {response_rate:.2f}%)" + RESET)
+        if total_hosts:
+            smooth_print(FG_BLUE + f"Range usage            : {usage_percent:.2f}% of {total_hosts}" + RESET)
+
+        if response_alert:
+            smooth_print(FG_RED + f"[!] Low response rate detected: {response_rate:.2f}%" + RESET)
+        if high_latency:
+            smooth_print(FG_YELLOW + "[!] High latency devices detected:" + RESET)
+            for ip, rtt in high_latency:
+                smooth_print(FG_YELLOW + f" - {ip} => {rtt} ms" + RESET)
+        if duplicate_ips:
+            smooth_print(FG_RED + "[!] Duplicate IPs detected (possible conflict):" + RESET)
+            for item in duplicate_ips:
+                smooth_print(FG_RED + f" - {item['ip']} => {', '.join(item['macs'])}" + RESET)
+        if missing_hostnames:
+            smooth_print(FG_YELLOW + "[!] Devices without hostname (mDNS/NetBIOS not resolved):" + RESET)
+            for d in missing_hostnames:
+                smooth_print(FG_YELLOW + f" - {d.get('ip')} ({d.get('vendor','Unknown')})" + RESET)
+        if watch_hits:
+            smooth_print(FG_RED + "[!] Watchlist hits:" + RESET)
+            for d in watch_hits:
+                smooth_print(FG_RED + f" - {d.get('ip')} {d.get('mac')} {d.get('vendor')}" + RESET)
+        if gw_change:
+            smooth_print(FG_RED + "[!] Gateway MAC change detected:" + RESET)
+            smooth_print(FG_RED + f" - Previous: {prev_gw_mac}" + RESET)
+            smooth_print(FG_RED + f" - Current : {current_gw_mac}" + RESET)
+        if unknown_devices:
+            smooth_print(FG_YELLOW + "[!] New/Unknown devices since last scan:" + RESET)
+            for d in unknown_devices:
+                smooth_print(FG_YELLOW + f" - {d.get('ip')} {d.get('mac')} {d.get('vendor')}" + RESET)
+        if came_online or went_offline:
+            smooth_print(FG_CYAN + "[INFO] Online/Offline changes:" + RESET)
+            for ip in came_online:
+                smooth_print(FG_GREEN + f" + Online: {ip}" + RESET)
+            for ip in went_offline:
+                smooth_print(FG_RED + f" - Offline: {ip}" + RESET)
 
         smooth_print(FG_GREEN + "\n[✓] Scan completed successfully | اسکن با موفقیت انجام شد" + RESET)
 
@@ -1657,7 +1845,56 @@ def perform_scan(ctx):
             mesh_alerts
         )
 
-        input("\nPress Enter to continue | برای ادامه Enter بزن")
+        gateway_mac = None
+        for d in enriched_devices:
+            if d.get("ip") == ctx.get("gateway"):
+                gateway_mac = d.get("mac")
+                break
+
+        scan_summary = {
+            "total_devices": total,
+            "packet_loss": packet_loss,
+            "response_rate": response_rate,
+            "gateway_mac": gateway_mac,
+            "high_latency_count": len(high_latency),
+            "network_range": str(net),
+            "range_usage_percent": usage_percent,
+        }
+        scan_record = build_scan_record(enriched_devices, scan_summary)
+        save_last_scan(LAST_SCAN_FILE, scan_record)
+        append_scan_history(
+            HISTORY_FILE,
+            scan_record,
+            max_entries=active_profile.get("max_history", 50),
+        )
+        append_operation_log(LOG_FILE, f"Scan completed on {iface} range {net}")
+
+        summary_diff = compare_scan_summaries(prev_scan, scan_record)
+        change_summary = summarize_changes(prev_scan, scan_record)
+        mismatch_alert, mismatch_percent = detect_scan_mismatch(prev_scan, scan_record)
+
+        report_paths = build_report_paths(
+            os.path.join(BASE_DIR, active_profile.get("report_dir", "data/reports")),
+            timestamp_label,
+        )
+        if active_profile.get("report_json", True):
+            write_json_report(report_paths["json"], scan_record)
+        if active_profile.get("report_html", True):
+            write_html_report(report_paths["html"], scan_record)
+
+        if summary_diff:
+            smooth_print(FG_CYAN + f"[i] Summary diff: {summary_diff}" + RESET)
+        if change_summary and change_summary.get("status") != "no_previous_scan":
+            smooth_print(
+                FG_CYAN
+                + f"[i] Added: {change_summary.get('added_count')} | Removed: {change_summary.get('removed_count')}"
+                + RESET
+            )
+        if mismatch_alert:
+            smooth_print(FG_RED + f"[!] Scan mismatch detected ({mismatch_percent:.2f}% change)" + RESET)
+
+        if not scheduled:
+            input("\nPress Enter to continue | برای ادامه Enter بزن")
 
     except KeyboardInterrupt:
         print("\n" + FG_RED + "[!] Scan interrupted by user" + RESET)
@@ -1668,6 +1905,173 @@ def perform_scan(ctx):
 # =========================================================
 # ===================== Menu ==============================
 # =========================================================
+def run_scheduled_scans(ctx, interval_min, cycles, net_override=None):
+    if interval_min <= 0:
+        print(FG_RED + "[!] Interval must be greater than 0 minutes." + RESET)
+        time.sleep(1)
+        return
+    if cycles <= 0:
+        print(FG_RED + "[!] Cycles must be greater than 0." + RESET)
+        time.sleep(1)
+        return
+
+    print(FG_CYAN + f"[INFO] Scheduled scan started: every {interval_min} minute(s), {cycles} cycle(s)." + RESET)
+    for idx in range(cycles):
+        print(FG_CYAN + f"[INFO] Cycle {idx + 1}/{cycles}" + RESET)
+        perform_scan(ctx, scheduled=True, net_override=net_override)
+        if idx < cycles - 1:
+            print(FG_GRAY + f"[INFO] Next scan in {interval_min} minute(s)..." + RESET)
+            time.sleep(interval_min * 60)
+
+
+def schedule_menu(ctx):
+    global profiles, active_profile
+    os.system("clear")
+    current_interval = active_profile.get("schedule_interval_min", 0)
+    print(FG_CYAN + BOLD + "=== Scheduled Scan Menu ===" + RESET)
+    print(FG_GRAY + "Example: Set interval to 30 minutes and run 3 cycles." + RESET)
+    print(FG_GRAY + "You can disable scheduling by setting interval to 0." + RESET)
+    print()
+    print(FG_GREEN + f"[1] Set interval (current: {current_interval} min)" + RESET)
+    print(FG_YELLOW + "[2] Run scheduled scan now" + RESET)
+    print(FG_RED + "[3] Back" + RESET)
+    choice = input("\nSelect > ").strip()
+
+    if choice == "1":
+        val = input("Enter interval in minutes (0 to disable): ").strip()
+        try:
+            interval = int(val)
+        except ValueError:
+            print(FG_RED + "Invalid number." + RESET)
+            time.sleep(1)
+            return
+        active_profile["schedule_interval_min"] = max(0, interval)
+        profiles = update_profile(profiles, ACTIVE_PROFILE, active_profile)
+        save_profiles(PROFILE_FILE, profiles)
+        print(FG_GREEN + f"Interval set to {active_profile['schedule_interval_min']} minutes." + RESET)
+        time.sleep(1)
+    elif choice == "2":
+        if current_interval <= 0:
+            print(FG_YELLOW + "Interval is 0. Set a valid interval first." + RESET)
+            time.sleep(1)
+            return
+        cycles_val = input("How many cycles? (example: 3) ").strip()
+        try:
+            cycles = int(cycles_val)
+        except ValueError:
+            print(FG_RED + "Invalid cycles number." + RESET)
+            time.sleep(1)
+            return
+        net_override = load_network_range()
+        if not net_override:
+            net_override = detect_network_range()
+        run_scheduled_scans(ctx, current_interval, cycles, net_override=net_override)
+    else:
+        return
+
+
+def profile_menu():
+    global profiles, ACTIVE_PROFILE, active_profile, SILENT_MODE, COLOR_WARNINGS
+    os.system("clear")
+    print(FG_CYAN + BOLD + "=== Profile Manager ===" + RESET)
+    print(FG_GRAY + f"Active profile: {ACTIVE_PROFILE}" + RESET)
+    print()
+    print(FG_GREEN + "[1] Create new profile (copy current)" + RESET)
+    print(FG_YELLOW + "[2] Switch profile" + RESET)
+    print(FG_RED + "[3] Back" + RESET)
+    choice = input("\nSelect > ").strip()
+
+    if choice == "1":
+        name = input("New profile name: ").strip()
+        if not name:
+            print(FG_RED + "Invalid name." + RESET)
+            time.sleep(1)
+            return
+        profiles = update_profile(profiles, name, active_profile)
+        save_profiles(PROFILE_FILE, profiles)
+        print(FG_GREEN + f"Profile '{name}' created." + RESET)
+        time.sleep(1)
+    elif choice == "2":
+        name = input("Enter profile name to switch: ").strip()
+        if name not in profiles:
+            print(FG_RED + "Profile not found." + RESET)
+            time.sleep(1)
+            return
+        ACTIVE_PROFILE = name
+        write_config_file(CONF_FILE, {"ACTIVE_PROFILE": ACTIVE_PROFILE})
+        active_profile = get_profile(profiles, ACTIVE_PROFILE)
+        SILENT_MODE = active_profile.get("silent_mode", SILENT_MODE)
+        COLOR_WARNINGS = active_profile.get("color_warnings", COLOR_WARNINGS)
+        apply_profile_settings()
+        print(FG_GREEN + f"Switched to profile '{ACTIVE_PROFILE}'." + RESET)
+        time.sleep(1)
+    else:
+        return
+
+
+def settings_menu(ctx):
+    global profiles, active_profile, SILENT_MODE, COLOR_WARNINGS
+    while True:
+        os.system("clear")
+        print(FG_CYAN + BOLD + "=== Settings & Scheduler ===" + RESET)
+        print(FG_GRAY + f"Active profile: {ACTIVE_PROFILE}" + RESET)
+        print()
+        print(FG_GREEN + f"[1] Toggle silent mode (current: {SILENT_MODE})" + RESET)
+        print(FG_GREEN + f"[2] Toggle colored warnings (current: {COLOR_WARNINGS})" + RESET)
+        print(FG_GREEN + f"[3] Set latency threshold ms (current: {active_profile.get('latency_threshold_ms', 150)})" + RESET)
+        print(FG_GREEN + f"[4] Set low response threshold % (current: {active_profile.get('low_response_threshold', 35)})" + RESET)
+        print(FG_GREEN + f"[5] Toggle JSON report (current: {active_profile.get('report_json', True)})" + RESET)
+        print(FG_GREEN + f"[6] Toggle HTML report (current: {active_profile.get('report_html', True)})" + RESET)
+        print(FG_GREEN + f"[7] Set report directory (current: {active_profile.get('report_dir', 'data/reports')})" + RESET)
+        print(FG_YELLOW + "[8] Profile manager" + RESET)
+        print(FG_YELLOW + "[9] Scheduled scans" + RESET)
+        print(FG_RED + "[0] Back" + RESET)
+        choice = input("\nSelect > ").strip()
+
+        if choice == "1":
+            SILENT_MODE = not SILENT_MODE
+            active_profile["silent_mode"] = SILENT_MODE
+        elif choice == "2":
+            COLOR_WARNINGS = not COLOR_WARNINGS
+            active_profile["color_warnings"] = COLOR_WARNINGS
+        elif choice == "3":
+            val = input("Latency threshold ms (example: 150): ").strip()
+            try:
+                active_profile["latency_threshold_ms"] = int(val)
+            except ValueError:
+                print(FG_RED + "Invalid number." + RESET)
+                time.sleep(1)
+                continue
+        elif choice == "4":
+            val = input("Low response threshold % (example: 35): ").strip()
+            try:
+                active_profile["low_response_threshold"] = int(val)
+            except ValueError:
+                print(FG_RED + "Invalid number." + RESET)
+                time.sleep(1)
+                continue
+        elif choice == "5":
+            active_profile["report_json"] = not active_profile.get("report_json", True)
+        elif choice == "6":
+            active_profile["report_html"] = not active_profile.get("report_html", True)
+        elif choice == "7":
+            val = input("Report directory (example: data/reports): ").strip()
+            if val:
+                active_profile["report_dir"] = val
+        elif choice == "8":
+            profile_menu()
+        elif choice == "9":
+            schedule_menu(ctx)
+        elif choice == "0":
+            break
+        else:
+            print(FG_RED + "Invalid choice." + RESET)
+            time.sleep(1)
+            continue
+
+        profiles = update_profile(profiles, ACTIVE_PROFILE, active_profile)
+        save_profiles(PROFILE_FILE, profiles)
+
 def main_menu(ctx):
     while True:
         os.system("clear")
@@ -1683,7 +2087,8 @@ def main_menu(ctx):
         print(FG_GREEN  + "║  [1] ▶  " + RESET + pad(T["menu_option_scan"][3:], W-8) + FG_GREEN  + "║" + RESET)
         print(FG_BLUE   + "║  [2] ⟳  " + RESET + pad(T["menu_option_update"][3:], W-8) + FG_BLUE   + "║" + RESET)
         print(FG_YELLOW + "║  [3] ✖  " + RESET + pad(T["menu_option_uninstall"][3:], W-8) + FG_YELLOW + "║" + RESET)
-        print(FG_RED    + "║  [4] ⏻  " + RESET + pad(T["menu_option_exit"][3:], W-8) + FG_RED    + "║" + RESET)
+        print(FG_MAGENTA + "║  [4] ⚙  " + RESET + pad(T["menu_option_settings"][3:], W-8) + FG_MAGENTA + "║" + RESET)
+        print(FG_RED    + "║  [5] ⏻  " + RESET + pad(T["menu_option_exit"][3:], W-8) + FG_RED    + "║" + RESET)
 
         print(FG_CYAN + BOLD + "╚" + "═"*W + "╝" + RESET)
 
@@ -1704,6 +2109,8 @@ def main_menu(ctx):
             print(FG_GREEN + T["exit_uninstall"] + RESET)
             break
         elif choice == "4":
+            settings_menu(ctx)
+        elif choice == "5":
             msg = T["exit_human"] if NETSCAN_TONE == "human" else T["exit_neutral"]
             print(FG_GREEN + msg + RESET)
             break
@@ -1714,6 +2121,8 @@ if __name__ == "__main__":
     if "--update" in sys.argv:
         sys.exit(perform_update())
 
+    ensure_data_paths()
+    apply_profile_settings()
     ctx = collect_base_reality()
     print_base_reality(ctx)
     main_menu(ctx)
