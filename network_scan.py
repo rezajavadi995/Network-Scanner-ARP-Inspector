@@ -102,13 +102,13 @@ def render_progress_bar(percent, width=10):
     filled = int((percent / 100) * width)
     return "▓" * filled + "░" * (width - filled)
 
-def smooth_print(text, delay=0.02):
+def smooth_print(message="", delay=0.02):
     """
     Print lines with a small delay to make output more readable.
     """
     if SILENT_MODE:
         delay = 0
-    for line in str(text).splitlines():
+    for line in str(message).splitlines():
         print(line)
         time.sleep(delay)
 
@@ -143,9 +143,6 @@ def apply_profile_settings():
         BASE_DELAY = settings["BASE_DELAY"]
     if "ARP_DELAY" in settings:
         ARP_DELAY = settings["ARP_DELAY"]
-    for line in str(text).splitlines():
-        print(line)
-        time.sleep(delay)
 # =========================================================
 # ===================== OUI Mode ==========================
 # =========================================================
