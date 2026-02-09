@@ -101,7 +101,7 @@ sudo -v
 #sudo apt update
 apt_update_if_needed
 
-DEPENDENCIES=(python3 curl iproute2 iputils-ping gawk coreutils)
+DEPENDENCIES=(python3 curl iproute2 iputils-ping gawk coreutils iw network-manager)
 for pkg in "${DEPENDENCIES[@]}"; do
   printf "[*] %-18s : " "$pkg"
   if ! command -v "$pkg" >/dev/null 2>&1 && ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -241,7 +241,7 @@ fi
 # =========================================================
 {
   echo "OUI_MODE=$OUI_MODE"
-  echo "LANG=$LANG"
+  echo "NETSCAN_LANG=$LANG"
 } > "$CONF_FILE"
 
 chmod 600 "$CONF_FILE"
