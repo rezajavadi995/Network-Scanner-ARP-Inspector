@@ -44,7 +44,9 @@ from utils.validators import (
     load_watchlist,
     parse_ping_time_ms,
     read_config_file,
+    safe_nmcli_connection_name,
     resolve_hostname,
+    download_with_retries,
     save_last_scan,
     save_profiles,
     summarize_changes,
@@ -598,10 +600,8 @@ def perform_update():
 
     for rel_path, dest_path in update_map.items():
         url = f"{base_url}/{rel_path}"
-        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-        try:
-            urllib.request.urlretrieve(url, dest_path)
-        except Exception as exc:
+        success, exc = download_with_retries(url, dest_path, retries=3, timeout=6)
+        if not success:
             print(FG_RED + f"[✗] Failed to update {rel_path}: {exc}" + RESET)
             return 1
 
@@ -1526,22 +1526,7 @@ def get_connection_name(iface):
     FA: نام واقعی اتصال (SSID یا LAN)
     EN: Real connection name
     """
-    name = "Unknown"
-    try:
-        # لینوکس: nmcli برای وایرلس و LAN
-        out = subprocess.check_output(
-            ["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device"],
-            text=True
-        )
-        for line in out.splitlines():
-            dev, conn = line.split(":", 1)
-            if dev == iface:
-                name = conn if conn else "Unknown"
-                break
-    except Exception:
-        # اگر خطایی بود، نام Unknown باقی می‌ماند
-        pass
-    return name
+    return safe_nmcli_connection_name(iface)
     
 
 #####

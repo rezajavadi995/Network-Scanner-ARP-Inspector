@@ -8,6 +8,7 @@ import re
 import shutil
 import socket
 import subprocess
+import time
 from datetime import datetime
 
 
@@ -304,6 +305,45 @@ def resolve_hostname(ip):
     return get_hostname_mdns_netbios(ip)
 
 
+def command_exists(cmd):
+    return shutil.which(cmd) is not None
+
+
+def is_service_active(service_name):
+    if not command_exists("systemctl"):
+        return False
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "--quiet", service_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def safe_nmcli_connection_name(iface):
+    if not iface or not command_exists("nmcli"):
+        return "Unknown"
+    if not is_service_active("NetworkManager"):
+        return "Unknown"
+    try:
+        out = subprocess.check_output(
+            ["nmcli", "-t", "-f", "DEVICE,CONNECTION", "device"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        for line in out.splitlines():
+            dev, conn = line.split(":", 1)
+            if dev == iface:
+                return conn if conn else "Unknown"
+    except Exception:
+        return "Unknown"
+    return "Unknown"
+
+
 def guess_vlan(ip, network):
     try:
         if ipaddress.ip_address(ip) in ipaddress.ip_network(network, strict=False):
@@ -377,6 +417,23 @@ th {{ background:#1b1f23; }}
 </html>"""
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)
+
+
+def download_with_retries(url, dest_path, retries=3, timeout=6):
+    ensure_dir(os.path.dirname(dest_path))
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            import urllib.request
+            with urllib.request.urlopen(url, timeout=timeout) as r:
+                data = r.read()
+            with open(dest_path, "wb") as f:
+                f.write(data)
+            return True, None
+        except Exception as exc:
+            last_exc = exc
+            time.sleep(min(2 * attempt, 5))
+    return False, last_exc
 
 
 def append_operation_log(path, message):
